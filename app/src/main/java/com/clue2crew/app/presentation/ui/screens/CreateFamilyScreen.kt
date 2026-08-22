@@ -10,10 +10,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
 import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
 
 @Composable
-fun CreateFamilyScreen(navController: NavController) {
+fun CreateFamilyScreen(navController: NavController, viewModel: FamilyViewModel) {
     var familyName by remember { mutableStateOf("") }
 
     Clue2CrewScaffold(navController = navController) { innerPadding ->
@@ -49,10 +51,16 @@ fun CreateFamilyScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
-                onClick = { /* Mock create */ },
+                onClick = { 
+                    if (familyName.isNotEmpty()) {
+                        viewModel.createFamily(familyName)
+                        navController.popBackStack()
+                    }
+                },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF415A77)),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                enabled = familyName.isNotEmpty()
             ) {
                 Text("Create Family", fontSize = 18.sp)
             }

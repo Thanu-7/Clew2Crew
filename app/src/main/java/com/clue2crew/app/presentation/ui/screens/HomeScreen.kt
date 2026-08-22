@@ -1,5 +1,7 @@
 package com.clue2crew.app.presentation.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -9,20 +11,66 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
 import com.clue2crew.app.presentation.navigation.Screen
 import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
+import com.clue2crew.app.common.utils.LocationHelper
+import android.Manifest
+import android.content.pm.PackageManager
 
 @Composable
-fun HomeScreen(navController: NavController) {
+fun HomeScreen(navController: NavController, viewModel: FamilyViewModel) {
+    val family by viewModel.family.collectAsState()
+    val members by viewModel.members.collectAsState()
+    val context = LocalContext.current
+    val locationHelper = remember { LocationHelper(context) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) ||
+                      permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
+        if (granted) {
+            locationHelper.getCurrentLocation { location ->
+                location?.let { 
+                    viewModel.updateCurrentDeviceLocation(it)
+                    viewModel.updateFirstMemberLocation(it.latitude, it.longitude) 
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val hasFineLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val hasCoarseLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+        if (hasFineLocation || hasCoarseLocation) {
+            locationHelper.getCurrentLocation { location ->
+                location?.let { 
+                    viewModel.updateCurrentDeviceLocation(it)
+                    viewModel.updateFirstMemberLocation(it.latitude, it.longitude) 
+                }
+            }
+        } else {
+            permissionLauncher.launch(arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ))
+        }
+    }
+
     Clue2CrewScaffold(navController = navController) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -33,7 +81,7 @@ fun HomeScreen(navController: NavController) {
         ) {
             item {
                 Text(
-                    text = "Good Morning, User",
+                    text = if (family != null) "Hello, Family" else "Welcome to Clue2Crew",
                     color = Color.White,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
@@ -41,21 +89,43 @@ fun HomeScreen(navController: NavController) {
             }
 
             item {
-                DashboardCard(
-                    title = "My Family Group",
-                    subtitle = "3 Members • 2 Connected",
-                    onClick = { navController.navigate(Screen.FamilyDashboard.route) }
-                )
+                if (family != null) {
+                    DashboardCard(
+                        title = family?.familyName ?: "My Family Group",
+                        subtitle = "${members.size} Members • ${members.count { it.status == "Connected" }} Connected",
+                        onClick = { navController.navigate(Screen.FamilyDashboard.route) }
+                    )
+                } else {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { navController.navigate(Screen.CreateFamily.route) },
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(24.dp)) {
+                            Text(text = "No Family Group", color = Color(0xFF0D1B2A), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Tap to create one", color = Color.Gray, fontSize = 14.sp)
+                        }
+                    }
+                }
             }
 
             item {
                 Button(
-                    onClick = { navController.navigate(Screen.FindFamily.createRoute("1")) },
+                    onClick = { 
+                        if (members.isNotEmpty()) {
+                            navController.navigate(Screen.FindFamily.createRoute(members.first().memberId)) 
+                        } else {
+                            navController.navigate(Screen.FamilyDashboard.route)
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(80.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B263B)),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    enabled = members.isNotEmpty()
                 ) {
                     Text("FIND FAMILY", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }

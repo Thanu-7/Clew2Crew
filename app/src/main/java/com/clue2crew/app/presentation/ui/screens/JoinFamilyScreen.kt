@@ -10,11 +10,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
 import com.clue2crew.app.presentation.navigation.Screen
 import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
 
 @Composable
-fun JoinFamilyScreen(navController: NavController) {
+fun JoinFamilyScreen(navController: NavController, viewModel: FamilyViewModel) {
     var pairingCode by remember { mutableStateOf("") }
 
     Clue2CrewScaffold(navController = navController) { innerPadding ->
@@ -67,6 +69,7 @@ fun JoinFamilyScreen(navController: NavController) {
             Button(
                 onClick = { 
                     if (pairingCode.isNotEmpty()) {
+                        viewModel.addMember("Joined Member")
                         navController.navigate(Screen.FamilyDashboard.route) 
                     }
                 },

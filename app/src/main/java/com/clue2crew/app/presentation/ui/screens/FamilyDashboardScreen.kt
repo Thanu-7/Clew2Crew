@@ -19,14 +19,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.clue2crew.app.common.models.FamilyMember
-import com.clue2crew.app.common.utils.MockData
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.clue2crew.app.data.local.entities.FamilyMemberEntity
+import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
 import com.clue2crew.app.presentation.navigation.Screen
 import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
 
 @Composable
-fun FamilyDashboardScreen(navController: NavController) {
-    val members = MockData.familyGroup.members
+fun FamilyDashboardScreen(navController: NavController, viewModel: FamilyViewModel) {
+    val family by viewModel.family.collectAsState()
+    val members by viewModel.members.collectAsState()
+    val myLocation by viewModel.currentDeviceLocation.collectAsState()
 
     Clue2CrewScaffold(navController = navController) { innerPadding ->
         Column(
@@ -41,13 +46,18 @@ fun FamilyDashboardScreen(navController: NavController) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "My Family",
+                    text = family?.familyName ?: "My Family",
                     color = Color.White,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
                 )
                 IconButton(
-                    onClick = { navController.navigate(Screen.CreateFamily.route) },
+                    onClick = { 
+                        // Simulate adding a member with an offset for testing
+                        val lat = myLocation?.latitude?.plus(0.005) // Approx 500m North
+                        val lng = myLocation?.longitude?.plus(0.005) // Approx 500m East
+                        viewModel.addMember("Demo Target", lat, lng)
+                    },
                     modifier = Modifier.background(Color(0xFF415A77), CircleShape)
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Add Member", tint = Color.White)
@@ -59,19 +69,30 @@ fun FamilyDashboardScreen(navController: NavController) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(members) { member ->
                     FamilyMemberCard(member = member) {
-                        navController.navigate(Screen.FindFamily.createRoute(member.id))
+                        navController.navigate(Screen.FindFamily.createRoute(member.memberId))
                     }
                 }
                 
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { navController.navigate(Screen.JoinFamily.route) },
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B263B)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Join Existing Family")
+                    if (family == null) {
+                        Button(
+                            onClick = { navController.navigate(Screen.CreateFamily.route) },
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF415A77)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Create Family Group")
+                        }
+                    } else {
+                        Button(
+                            onClick = { viewModel.deleteFamily() },
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF780000)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Delete Family Group")
+                        }
                     }
                 }
             }
@@ -80,7 +101,7 @@ fun FamilyDashboardScreen(navController: NavController) {
 }
 
 @Composable
-fun FamilyMemberCard(member: FamilyMember, onClick: () -> Unit) {
+fun FamilyMemberCard(member: FamilyMemberEntity, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -101,7 +122,7 @@ fun FamilyMemberCard(member: FamilyMember, onClick: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
                 
-                ConnectionBadge(isConnected = member.isConnected)
+                ConnectionBadge(isConnected = member.status == "Connected")
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -112,10 +133,10 @@ fun FamilyMemberCard(member: FamilyMember, onClick: () -> Unit) {
                 verticalAlignment = Alignment.Bottom
             ) {
                 Column {
-                    LocationStatus(isLive = member.isLive)
-                    Text(text = "Distance: ${member.distance}", color = Color.DarkGray, fontSize = 14.sp)
+                    LocationStatus(isLive = true) // Mocked as live for now
+                    Text(text = "ID: ${member.memberId.take(8)}", color = Color.DarkGray, fontSize = 14.sp)
                 }
-                Text(text = "Updated: ${member.lastUpdated}", color = Color.Gray, fontSize = 12.sp)
+                Text(text = "Status: ${member.status}", color = Color.Gray, fontSize = 12.sp)
             }
         }
     }
