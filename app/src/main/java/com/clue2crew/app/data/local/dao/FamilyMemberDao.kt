@@ -20,4 +20,7 @@ interface FamilyMemberDao {
 
     @Query("UPDATE family_members SET latitude = :lat, longitude = :lng, status = :status WHERE memberId = :id")
     suspend fun updateMemberLocation(id: String, lat: Double?, lng: Double?, status: String)
+
+    @Query("SELECT * FROM family_members WHERE memberId = :memberId AND familyId = :familyId LIMIT 1")
+    suspend fun getMember(memberId: String, familyId: String): FamilyMemberEntity?
 }

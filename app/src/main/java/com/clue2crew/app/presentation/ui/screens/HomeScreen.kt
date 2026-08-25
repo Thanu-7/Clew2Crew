@@ -114,8 +114,9 @@ fun HomeScreen(navController: NavController, viewModel: FamilyViewModel) {
             item {
                 Button(
                     onClick = { 
-                        if (members.isNotEmpty()) {
-                            navController.navigate(Screen.FindFamily.createRoute(members.first().memberId)) 
+                        val target = members.firstOrNull { !it.isMe }
+                        if (target != null) {
+                            navController.navigate(Screen.FindFamily.createRoute(target.memberId)) 
                         } else {
                             navController.navigate(Screen.FamilyDashboard.route)
                         }
@@ -125,7 +126,7 @@ fun HomeScreen(navController: NavController, viewModel: FamilyViewModel) {
                         .height(80.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B263B)),
                     shape = RoundedCornerShape(16.dp),
-                    enabled = members.isNotEmpty()
+                    enabled = family != null
                 ) {
                     Text("FIND FAMILY", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }

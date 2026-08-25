@@ -1,6 +1,7 @@
 package com.clue2crew.app.presentation.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,6 +16,7 @@ import java.util.UUID
 
 class FamilyViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: FamilyRepository
+    private val prefs = application.getSharedPreferences("clue2crew_prefs", Context.MODE_PRIVATE)
 
     val family: StateFlow<FamilyEntity?>
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -23,9 +25,17 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     private val _currentDeviceLocation = MutableStateFlow<Location?>(null)
     val currentDeviceLocation: StateFlow<Location?> = _currentDeviceLocation.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     init {
         val database = Clue2CrewDatabase.getDatabase(application)
         repository = FamilyRepository(database.familyDao(), database.familyMemberDao())
+
+        // Ensure stable device identity
+        if (prefs.getString("my_member_id", null) == null) {
+            prefs.edit().putString("my_member_id", UUID.randomUUID().toString()).apply()
+        }
         
         family = repository.family.stateIn(
             scope = viewModelScope,
@@ -48,14 +58,90 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun createFamily(name: String) {
-        viewModelScope.launch {
-            val newFamily = FamilyEntity(
-                familyId = UUID.randomUUID().toString(),
-                familyName = name,
-                createdAt = System.currentTimeMillis()
-            )
-            repository.createFamily(newFamily)
+        if (name.isBlank()) {
+            _error.value = "Family name cannot be empty."
+            return
         }
+
+        val familyId = UUID.randomUUID().toString()
+        val pairingCode = generatePairingCode()
+        val myId = prefs.getString("my_member_id", "") ?: ""
+
+        viewModelScope.launch {
+            try {
+                val newFamily = FamilyEntity(
+                    familyId = familyId,
+                    familyName = name.trim(),
+                    pairingCode = pairingCode,
+                    createdAt = System.currentTimeMillis()
+                )
+                repository.createFamily(newFamily)
+
+                // Register current device as first member
+                val me = FamilyMemberEntity(
+                    memberId = myId,
+                    familyId = familyId,
+                    name = "Me",
+                    deviceId = android.os.Build.MODEL,
+                    status = "Connected",
+                    isMe = true
+                )
+                repository.addMember(me)
+                _error.value = null
+            } catch (e: Exception) {
+                _error.value = "Failed to create family: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun joinFamily(pairingCode: String) {
+        val code = pairingCode.trim().uppercase()
+        if (code.isBlank()) {
+            _error.value = "Please enter a pairing code."
+            return
+        }
+
+        val myId = prefs.getString("my_member_id", "") ?: ""
+        viewModelScope.launch {
+            try {
+                val targetFamily = repository.getFamilyByPairingCode(code)
+                if (targetFamily != null) {
+                    // Check if already a member
+                    val existingMember = repository.getMember(myId, targetFamily.familyId)
+                    if (existingMember != null) {
+                        _error.value = "You are already a member of this family."
+                        return@launch
+                    }
+
+                    val me = FamilyMemberEntity(
+                        memberId = myId,
+                        familyId = targetFamily.familyId,
+                        name = "Me (Joined)",
+                        deviceId = android.os.Build.MODEL,
+                        status = "Connected",
+                        isMe = true
+                    )
+                    repository.addMember(me)
+                    _error.value = null
+                } else {
+                    _error.value = "Invalid pairing code. Family not found."
+                }
+            } catch (e: Exception) {
+                _error.value = "Failed to join family: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    private fun generatePairingCode(): String {
+        // Human-friendly characters: Avoid 0, O, I, 1, L
+        val allowedChars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+        return (1..6)
+            .map { allowedChars.random() }
+            .joinToString("")
+    }
+
+    fun clearError() {
+        _error.value = null
     }
 
     fun addMember(name: String, latitude: Double? = null, longitude: Double? = null) {
@@ -68,7 +154,8 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
                 deviceId = "MOCK_DEVICE_${UUID.randomUUID().toString().take(4)}",
                 status = "Connected",
                 latitude = latitude,
-                longitude = longitude
+                longitude = longitude,
+                isMe = false
             )
             repository.addMember(newMember)
         }
@@ -93,8 +180,8 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun updateFirstMemberLocation(latitude: Double, longitude: Double) {
-        val firstMember = members.value.firstOrNull() ?: return
-        updateLocation(firstMember.memberId, latitude, longitude)
+        val myId = prefs.getString("my_member_id", "") ?: ""
+        updateLocation(myId, latitude, longitude)
     }
 
     fun updateCurrentDeviceLocation(location: Location) {

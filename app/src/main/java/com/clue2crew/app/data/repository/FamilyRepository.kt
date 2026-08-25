@@ -27,6 +27,10 @@ class FamilyRepository(
         familyMemberDao.insertMember(member)
     }
 
+    suspend fun getMember(memberId: String, familyId: String): FamilyMemberEntity? {
+        return familyMemberDao.getMember(memberId, familyId)
+    }
+
     suspend fun removeMember(member: FamilyMemberEntity) {
         familyMemberDao.deleteMember(member)
     }

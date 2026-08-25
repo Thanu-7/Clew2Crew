@@ -31,7 +31,6 @@ import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
 fun FamilyDashboardScreen(navController: NavController, viewModel: FamilyViewModel) {
     val family by viewModel.family.collectAsState()
     val members by viewModel.members.collectAsState()
-    val myLocation by viewModel.currentDeviceLocation.collectAsState()
 
     Clue2CrewScaffold(navController = navController) { innerPadding ->
         Column(
@@ -45,22 +44,20 @@ fun FamilyDashboardScreen(navController: NavController, viewModel: FamilyViewMod
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = family?.familyName ?: "My Family",
-                    color = Color.White,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                IconButton(
-                    onClick = { 
-                        // Simulate adding a member with an offset for testing
-                        val lat = myLocation?.latitude?.plus(0.005) // Approx 500m North
-                        val lng = myLocation?.longitude?.plus(0.005) // Approx 500m East
-                        viewModel.addMember("Demo Target", lat, lng)
-                    },
-                    modifier = Modifier.background(Color(0xFF415A77), CircleShape)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Member", tint = Color.White)
+                Column {
+                    Text(
+                        text = family?.familyName ?: "My Family",
+                        color = Color.White,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (family != null) {
+                        Text(
+                            text = "Code: ${family?.pairingCode}",
+                            color = Color.LightGray,
+                            fontSize = 16.sp
+                        )
+                    }
                 }
             }
 
@@ -122,7 +119,24 @@ fun FamilyMemberCard(member: FamilyMemberEntity, onClick: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
                 
-                ConnectionBadge(isConnected = member.status == "Connected")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (member.isMe) {
+                        Surface(
+                            color = Color(0xFFE3F2FD),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Text(
+                                text = "YOU",
+                                color = Color(0xFF1976D2),
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+                    ConnectionBadge(isConnected = member.status == "Connected")
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))

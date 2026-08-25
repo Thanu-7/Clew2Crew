@@ -10,13 +10,30 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
+import com.clue2crew.app.presentation.navigation.Screen
 import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
 
 @Composable
 fun CreateFamilyScreen(navController: NavController, viewModel: FamilyViewModel) {
     var familyName by remember { mutableStateOf("") }
+    val family by viewModel.family.collectAsState()
+    val error by viewModel.error.collectAsState()
+
+    // Navigate to dashboard once family is created
+    LaunchedEffect(family) {
+        if (family != null) {
+            navController.navigate(Screen.FamilyDashboard.route) {
+                popUpTo(Screen.CreateFamily.route) { inclusive = true }
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.clearError()
+        }
+    }
 
     Clue2CrewScaffold(navController = navController) { innerPadding ->
         Column(
@@ -45,8 +62,18 @@ fun CreateFamilyScreen(navController: NavController, viewModel: FamilyViewModel)
                     focusedBorderColor = Color(0xFF415A77),
                     unfocusedBorderColor = Color.Gray
                 ),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                isError = error != null
             )
+
+            if (error != null) {
+                Text(
+                    text = error ?: "",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -54,7 +81,6 @@ fun CreateFamilyScreen(navController: NavController, viewModel: FamilyViewModel)
                 onClick = { 
                     if (familyName.isNotEmpty()) {
                         viewModel.createFamily(familyName)
-                        navController.popBackStack()
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -67,27 +93,17 @@ fun CreateFamilyScreen(navController: NavController, viewModel: FamilyViewModel)
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Text(text = "Sharing Options", color = Color.Gray, fontSize = 14.sp)
+            Text(text = "Sharing Options (Post-Creation)", color = Color.Gray, fontSize = 14.sp)
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedButton(
-                onClick = { /* Mock QR */ },
+                onClick = { /* Future Implementation */ },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                enabled = false
             ) {
-                Text("Show QR Code")
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedButton(
-                onClick = { /* Mock Code */ },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-            ) {
-                Text("Generate Pairing Code")
+                Text("Show QR Code (Upcoming)")
             }
         }
     }

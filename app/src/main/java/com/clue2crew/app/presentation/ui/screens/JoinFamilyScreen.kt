@@ -10,7 +10,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
 import com.clue2crew.app.presentation.navigation.Screen
 import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
@@ -18,6 +17,23 @@ import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
 @Composable
 fun JoinFamilyScreen(navController: NavController, viewModel: FamilyViewModel) {
     var pairingCode by remember { mutableStateOf("") }
+    val family by viewModel.family.collectAsState()
+    val error by viewModel.error.collectAsState()
+
+    // Navigate to dashboard if family is successfully joined
+    LaunchedEffect(family) {
+        if (family != null) {
+            navController.navigate(Screen.FamilyDashboard.route) {
+                popUpTo(Screen.JoinFamily.route) { inclusive = true }
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.clearError()
+        }
+    }
 
     Clue2CrewScaffold(navController = navController) { innerPadding ->
         Column(
@@ -52,7 +68,7 @@ fun JoinFamilyScreen(navController: NavController, viewModel: FamilyViewModel) {
 
             OutlinedTextField(
                 value = pairingCode,
-                onValueChange = { pairingCode = it },
+                onValueChange = { pairingCode = it.uppercase() },
                 label = { Text("Enter Pairing Code", color = Color.Gray) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -61,16 +77,25 @@ fun JoinFamilyScreen(navController: NavController, viewModel: FamilyViewModel) {
                     focusedBorderColor = Color(0xFF415A77),
                     unfocusedBorderColor = Color.Gray
                 ),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                isError = error != null
             )
+
+            if (error != null) {
+                Text(
+                    text = error ?: "",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = { 
                     if (pairingCode.isNotEmpty()) {
-                        viewModel.addMember("Joined Member")
-                        navController.navigate(Screen.FamilyDashboard.route) 
+                        viewModel.joinFamily(pairingCode)
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
