@@ -8,9 +8,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.clue2crew.app.presentation.navigation.Screen
+import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
 
 sealed class BottomNavItem(val screen: Screen, val icon: ImageVector, val label: String) {
     object Home : BottomNavItem(Screen.Home, Icons.Default.Home, "Home")
@@ -19,7 +22,7 @@ sealed class BottomNavItem(val screen: Screen, val icon: ImageVector, val label:
 }
 
 @Composable
-fun BottomNavigationBar(navController: NavController) {
+fun BottomNavigationBar(navController: NavController, viewModel: FamilyViewModel) {
     val items = listOf(
         BottomNavItem.Home,
         BottomNavItem.Family,
@@ -31,6 +34,7 @@ fun BottomNavigationBar(navController: NavController) {
     ) {
         val navBackStackEntry = navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry.value?.destination?.route
+        val members by viewModel.members.collectAsState()
 
         items.forEach { item ->
             NavigationBarItem(
@@ -38,14 +42,31 @@ fun BottomNavigationBar(navController: NavController) {
                 label = { Text(item.label) },
                 selected = currentRoute == item.screen.route || (item.screen is Screen.FindFamily && currentRoute?.startsWith("find_family") == true),
                 onClick = {
-                    navController.navigate(if (item.screen is Screen.FindFamily) Screen.FindFamily.createRoute("1") else item.screen.route) {
-                        navController.graph.startDestinationRoute?.let { route ->
-                            popUpTo(route) {
-                                saveState = true
+                    if (item.screen is Screen.FindFamily) {
+                        val targetMember = members.firstOrNull { !it.isMe }
+                        if (targetMember != null) {
+                            navController.navigate(Screen.FindFamily.createRoute(targetMember.memberId)) {
+                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        } else {
+                            navController.navigate(Screen.FamilyDashboard.route) {
+                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
                             }
                         }
-                        launchSingleTop = true
-                        restoreState = true
+                    } else {
+                        navController.navigate(item.screen.route) {
+                            navController.graph.startDestinationRoute?.let { route ->
+                                popUpTo(route) {
+                                    saveState = true
+                                }
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 },
                 colors = NavigationBarItemDefaults.colors(

@@ -52,7 +52,7 @@ fun FindFamilyScreen(navController: NavController, memberId: String?, viewModel:
         "SEARCHING..."
     }
 
-    Clue2CrewScaffold(navController = navController) { innerPadding ->
+    Clue2CrewScaffold(navController = navController, viewModel = viewModel) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

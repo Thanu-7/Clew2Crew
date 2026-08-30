@@ -25,6 +25,8 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     private val _currentDeviceLocation = MutableStateFlow<Location?>(null)
     val currentDeviceLocation: StateFlow<Location?> = _currentDeviceLocation.asStateFlow()
 
+    private var lastKnownLocation: Location? = null
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
@@ -84,6 +86,8 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
                     name = "Me",
                     deviceId = android.os.Build.MODEL,
                     status = "Connected",
+                    latitude = lastKnownLocation?.latitude,
+                    longitude = lastKnownLocation?.longitude,
                     isMe = true
                 )
                 repository.addMember(me)
@@ -119,6 +123,8 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
                         name = "Me (Joined)",
                         deviceId = android.os.Build.MODEL,
                         status = "Connected",
+                        latitude = lastKnownLocation?.latitude,
+                        longitude = lastKnownLocation?.longitude,
                         isMe = true
                     )
                     repository.addMember(me)
@@ -181,10 +187,13 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateFirstMemberLocation(latitude: Double, longitude: Double) {
         val myId = prefs.getString("my_member_id", "") ?: ""
-        updateLocation(myId, latitude, longitude)
+        if (family.value != null) {
+            updateLocation(myId, latitude, longitude)
+        }
     }
 
     fun updateCurrentDeviceLocation(location: Location) {
         _currentDeviceLocation.value = location
+        lastKnownLocation = location
     }
 }

@@ -20,9 +20,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
+import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
 
 @Composable
-fun OfflineTransferScreen(navController: NavController) {
+fun OfflineTransferScreen(navController: NavController, viewModel: FamilyViewModel) {
     val infiniteTransition = rememberInfiniteTransition()
     val rotation by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -33,7 +34,7 @@ fun OfflineTransferScreen(navController: NavController) {
         )
     )
 
-    Clue2CrewScaffold(navController = navController) { innerPadding ->
+    Clue2CrewScaffold(navController = navController, viewModel = viewModel) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

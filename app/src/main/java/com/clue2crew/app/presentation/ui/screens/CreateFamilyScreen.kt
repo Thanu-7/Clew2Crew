@@ -35,7 +35,7 @@ fun CreateFamilyScreen(navController: NavController, viewModel: FamilyViewModel)
         }
     }
 
-    Clue2CrewScaffold(navController = navController) { innerPadding ->
+    Clue2CrewScaffold(navController = navController, viewModel = viewModel) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

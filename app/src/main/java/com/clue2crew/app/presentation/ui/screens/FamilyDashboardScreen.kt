@@ -9,13 +9,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -31,8 +33,17 @@ import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
 fun FamilyDashboardScreen(navController: NavController, viewModel: FamilyViewModel) {
     val family by viewModel.family.collectAsState()
     val members by viewModel.members.collectAsState()
+    var showInviteDialog by remember { mutableStateOf(false) }
 
-    Clue2CrewScaffold(navController = navController) { innerPadding ->
+    if (showInviteDialog && family != null) {
+        InviteDialog(
+            familyName = family!!.familyName,
+            pairingCode = family!!.pairingCode,
+            onDismiss = { showInviteDialog = false }
+        )
+    }
+
+    Clue2CrewScaffold(navController = navController, viewModel = viewModel) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -56,6 +67,21 @@ fun FamilyDashboardScreen(navController: NavController, viewModel: FamilyViewMod
                             text = "Code: ${family?.pairingCode}",
                             color = Color.LightGray,
                             fontSize = 16.sp
+                        )
+                    }
+                }
+
+                if (family != null) {
+                    IconButton(
+                        onClick = { showInviteDialog = true },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(Color(0xFF1B263B), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PersonAdd,
+                            contentDescription = "Invite Member",
+                            tint = Color.White
                         )
                     }
                 }
@@ -154,6 +180,52 @@ fun FamilyMemberCard(member: FamilyMemberEntity, onClick: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+fun InviteDialog(familyName: String, pairingCode: String, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1B263B),
+        title = {
+            Text(
+                text = "Invite to $familyName",
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "Share this code with your family member. They can use it in 'Join Family' to connect with you.",
+                    color = Color.LightGray,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Surface(
+                    color = Color(0xFF0D1B2A),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = pairingCode,
+                        color = Color.White,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 4.sp,
+                        modifier = Modifier.padding(16.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("GOT IT", color = Color(0xFF415A77), fontWeight = FontWeight.Bold)
+            }
+        }
+    )
 }
 
 @Composable

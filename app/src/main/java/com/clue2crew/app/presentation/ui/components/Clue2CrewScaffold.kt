@@ -7,10 +7,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavController
+import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
 
 @Composable
 fun Clue2CrewScaffold(
     navController: NavController,
+    viewModel: FamilyViewModel,
     showBottomBar: Boolean = true,
     content: @Composable (PaddingValues) -> Unit
 ) {
@@ -18,7 +20,7 @@ fun Clue2CrewScaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
             if (showBottomBar) {
-                BottomNavigationBar(navController = navController)
+                BottomNavigationBar(navController = navController, viewModel = viewModel)
             }
         },
         containerColor = Color(0xFF0D1B2A)

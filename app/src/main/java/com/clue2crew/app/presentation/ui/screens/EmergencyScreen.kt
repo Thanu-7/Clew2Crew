@@ -12,10 +12,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
+import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
 
 @Composable
-fun EmergencyScreen(navController: NavController) {
-    Clue2CrewScaffold(navController = navController) { innerPadding ->
+fun EmergencyScreen(navController: NavController, viewModel: FamilyViewModel) {
+    Clue2CrewScaffold(navController = navController, viewModel = viewModel) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

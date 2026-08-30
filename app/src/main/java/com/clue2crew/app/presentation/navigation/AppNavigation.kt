@@ -24,7 +24,7 @@ fun AppNavigation(navController: NavHostController) {
             val memberId = backStackEntry.arguments?.getString("memberId")
             FindFamilyScreen(navController, memberId, familyViewModel)
         }
-        composable(Screen.Emergency.route) { EmergencyScreen(navController) }
-        composable(Screen.OfflineTransfer.route) { OfflineTransferScreen(navController) }
+        composable(Screen.Emergency.route) { EmergencyScreen(navController, familyViewModel) }
+        composable(Screen.OfflineTransfer.route) { OfflineTransferScreen(navController, familyViewModel) }
     }
 }
