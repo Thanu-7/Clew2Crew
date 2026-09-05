@@ -5,6 +5,8 @@ import android.content.Context
 import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.clue2crew.app.data.bluetooth.BleManager
+import com.clue2crew.app.data.bluetooth.DiscoveredDevice
 import com.clue2crew.app.data.local.database.Clue2CrewDatabase
 import com.clue2crew.app.data.local.entities.FamilyEntity
 import com.clue2crew.app.data.local.entities.FamilyMemberEntity
@@ -18,9 +20,19 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     private val repository: FamilyRepository
     private val prefs = application.getSharedPreferences("clue2crew_prefs", Context.MODE_PRIVATE)
 
+    private val bleManager = BleManager(application)
+
     val family: StateFlow<FamilyEntity?>
     @OptIn(ExperimentalCoroutinesApi::class)
     val members: StateFlow<List<FamilyMemberEntity>>
+
+    // BLE Flows
+    val isBleAdvertising: StateFlow<Boolean> = bleManager.isAdvertising
+    val isBleScanning: StateFlow<Boolean> = bleManager.isScanning
+    val discoveredBleDevices: StateFlow<List<DiscoveredDevice>> = bleManager.discoveredDevices
+    val bleConnectionState: StateFlow<String> = bleManager.connectionState
+    val lastBleMessage: StateFlow<String?> = bleManager.lastReceivedMessage
+    val bleStatusMessage: StateFlow<String> = bleManager.statusMessage
 
     private val _currentDeviceLocation = MutableStateFlow<Location?>(null)
     val currentDeviceLocation: StateFlow<Location?> = _currentDeviceLocation.asStateFlow()
@@ -195,5 +207,18 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     fun updateCurrentDeviceLocation(location: Location) {
         _currentDeviceLocation.value = location
         lastKnownLocation = location
+    }
+
+    // BLE Delegations
+    fun startBleAdvertising() = bleManager.startAdvertising()
+    fun stopBleAdvertising() = bleManager.stopAdvertising()
+    fun startBleScan(durationMs: Long = 10000L) = bleManager.startScan(durationMs)
+    fun stopBleScan() = bleManager.stopScan()
+    fun connectBleDevice(address: String) = bleManager.connectToDevice(address)
+    fun disconnectBle() = bleManager.disconnectGatt()
+
+    override fun onCleared() {
+        super.onCleared()
+        bleManager.cleanup()
     }
 }
