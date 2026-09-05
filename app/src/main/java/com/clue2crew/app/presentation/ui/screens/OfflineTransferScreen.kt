@@ -39,6 +39,8 @@ fun OfflineTransferScreen(navController: NavController, viewModel: FamilyViewMod
     val connectionState by viewModel.bleConnectionState.collectAsState()
     val lastMessage by viewModel.lastBleMessage.collectAsState()
     val statusMessage by viewModel.bleStatusMessage.collectAsState()
+    val isAuthenticated by viewModel.isBleAuthenticated.collectAsState()
+    val authenticatedMemberId by viewModel.authenticatedMemberId.collectAsState()
 
     var hasPermissions by remember { mutableStateOf(BleUtils.hasBluetoothPermissions(context)) }
 
@@ -114,6 +116,30 @@ fun OfflineTransferScreen(navController: NavController, viewModel: FamilyViewMod
                         Text(text = "Status: $statusMessage", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(text = "Connection: $connectionState", color = Color(0xFF415A77), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        
+                        if (isAuthenticated) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                color = Color(0xFF1B5E20),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = "AUTHENTICATED & ENCRYPTED (AES-GCM)",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                    Text(
+                                        text = "Member ID: ${authenticatedMemberId ?: "Verified"}",
+                                        color = Color.LightGray,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+
                         if (lastMessage != null) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Surface(
@@ -124,7 +150,7 @@ fun OfflineTransferScreen(navController: NavController, viewModel: FamilyViewMod
                                 Text(
                                     text = "Last Received: $lastMessage",
                                     color = Color.Green,
-                                    fontSize = 14.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(12.dp)
                                 )

@@ -33,6 +33,8 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     val bleConnectionState: StateFlow<String> = bleManager.connectionState
     val lastBleMessage: StateFlow<String?> = bleManager.lastReceivedMessage
     val bleStatusMessage: StateFlow<String> = bleManager.statusMessage
+    val isBleAuthenticated: StateFlow<Boolean> = bleManager.isAuthenticated
+    val authenticatedMemberId: StateFlow<String?> = bleManager.authenticatedMemberId
 
     private val _currentDeviceLocation = MutableStateFlow<Location?>(null)
     val currentDeviceLocation: StateFlow<Location?> = _currentDeviceLocation.asStateFlow()
@@ -210,11 +212,22 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     // BLE Delegations
-    fun startBleAdvertising() = bleManager.startAdvertising()
+    fun startBleAdvertising() {
+        val pairingCode = family.value?.pairingCode ?: "DEFAULT"
+        val myId = prefs.getString("my_member_id", "") ?: ""
+        bleManager.startAdvertising(pairingCode, myId)
+    }
+
     fun stopBleAdvertising() = bleManager.stopAdvertising()
     fun startBleScan(durationMs: Long = 10000L) = bleManager.startScan(durationMs)
     fun stopBleScan() = bleManager.stopScan()
-    fun connectBleDevice(address: String) = bleManager.connectToDevice(address)
+
+    fun connectBleDevice(address: String) {
+        val pairingCode = family.value?.pairingCode ?: "DEFAULT"
+        val myId = prefs.getString("my_member_id", "") ?: ""
+        bleManager.connectToDevice(address, pairingCode, myId)
+    }
+
     fun disconnectBle() = bleManager.disconnectGatt()
 
     override fun onCleared() {
