@@ -106,4 +106,38 @@ object AuthProtocol {
 
         return clientMemberId
     }
+
+    // Step 4: Encrypted Location Exchange
+    fun createLocationPacket(
+        sessionKey: SecretKey,
+        memberId: String,
+        latitude: Double,
+        longitude: Double,
+        timestampMs: Long = System.currentTimeMillis()
+    ): ByteArray {
+        val payload = "LOC:$memberId:$latitude:$longitude:$timestampMs"
+        return CryptoManager.encrypt(payload.toByteArray(StandardCharsets.UTF_8), sessionKey)
+    }
+
+    fun parseLocationPacket(
+        encryptedPacket: ByteArray,
+        sessionKey: SecretKey,
+        nowMs: Long = System.currentTimeMillis()
+    ): LocationData {
+        val decryptedBytes = CryptoManager.decrypt(encryptedPacket, sessionKey)
+        val decryptedStr = String(decryptedBytes, StandardCharsets.UTF_8)
+        val parts = decryptedStr.split(":")
+        require(parts.size == 5 && parts[0] == "LOC") { "Invalid Location Packet format" }
+
+        val memberId = parts[1]
+        val lat = parts[2].toDouble()
+        val lon = parts[3].toDouble()
+        val timestampMs = parts[4].toLong()
+
+        require(Math.abs(nowMs - timestampMs) <= MAX_TIMESTAMP_DELTA_MS) { "Stale location packet" }
+
+        return LocationData(memberId, lat, lon, timestampMs)
+    }
+
+    data class LocationData(val memberId: String, val latitude: Double, val longitude: Double, val timestampMs: Long)
 }

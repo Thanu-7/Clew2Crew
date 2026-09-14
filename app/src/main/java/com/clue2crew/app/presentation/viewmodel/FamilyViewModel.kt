@@ -11,7 +11,9 @@ import com.clue2crew.app.data.local.database.Clue2CrewDatabase
 import com.clue2crew.app.data.local.entities.FamilyEntity
 import com.clue2crew.app.data.local.entities.FamilyMemberEntity
 import com.clue2crew.app.data.repository.FamilyRepository
+import com.clue2crew.app.data.security.AuthProtocol
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -35,6 +37,7 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     val bleStatusMessage: StateFlow<String> = bleManager.statusMessage
     val isBleAuthenticated: StateFlow<Boolean> = bleManager.isAuthenticated
     val authenticatedMemberId: StateFlow<String?> = bleManager.authenticatedMemberId
+    val incomingBleLocation: StateFlow<AuthProtocol.LocationData?> = bleManager.incomingLocation
 
     private val _currentDeviceLocation = MutableStateFlow<Location?>(null)
     val currentDeviceLocation: StateFlow<Location?> = _currentDeviceLocation.asStateFlow()
@@ -43,6 +46,9 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _isDemoMode = MutableStateFlow(false)
+    val isDemoMode: StateFlow<Boolean> = _isDemoMode.asStateFlow()
 
     init {
         val database = Clue2CrewDatabase.getDatabase(application)
@@ -71,6 +77,52 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+        // Monitor incoming BLE location updates
+        viewModelScope.launch {
+            bleManager.incomingLocation.collect { locData ->
+                locData?.let {
+                    updateLocation(it.memberId, it.latitude, it.longitude, "Connected")
+                }
+            }
+        }
+
+        // Periodic location broadcasting over BLE when authenticated
+        viewModelScope.launch {
+            while (true) {
+                if (bleManager.isAuthenticated.value) {
+                    lastKnownLocation?.let { loc ->
+                        bleManager.sendLocation(loc.latitude, loc.longitude)
+                    }
+                }
+                delay(5000) // Broadcast location every 5 seconds
+            }
+        }
+
+        // Automatically start BLE services when family is present
+        viewModelScope.launch {
+            family.collect { f ->
+                if (f != null) {
+                    startBleAdvertising()
+                    startBleScan(60000) // Scan for 1 minute
+                } else {
+                    stopBleAdvertising()
+                    stopBleScan()
+                }
+            }
+        }
+
+        // Auto-connect to discovered Clew2Crew devices
+        viewModelScope.launch {
+            discoveredBleDevices.collect { devices ->
+                if (family.value != null && !isBleAuthenticated.value && bleConnectionState.value == "Disconnected") {
+                    val target = devices.firstOrNull() // Try the first one found
+                    target?.let { 
+                        connectBleDevice(it.address)
+                    }
+                }
+            }
+        }
     }
 
     fun createFamily(name: String) {
@@ -211,6 +263,35 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
         lastKnownLocation = location
     }
 
+    fun toggleDemoMode() {
+        _isDemoMode.value = !_isDemoMode.value
+        if (_isDemoMode.value) {
+            startDemoUpdates()
+        }
+    }
+
+    private fun startDemoUpdates() {
+        viewModelScope.launch {
+            while (_isDemoMode.value) {
+                val currentFam = family.value ?: break
+                val otherMembers = members.value.filter { !it.isMe }
+                
+                if (otherMembers.isEmpty()) {
+                    // Add a mock member if none exists
+                    addMember("Demo Member", 12.9716, 77.5946)
+                }
+
+                otherMembers.forEach { member ->
+                    // Simulate slight movement
+                    val newLat = (member.latitude ?: 12.9716) + (Math.random() - 0.5) * 0.001
+                    val newLon = (member.longitude ?: 77.5946) + (Math.random() - 0.5) * 0.001
+                    updateLocation(member.memberId, newLat, newLon, "Connected")
+                }
+                delay(3000)
+            }
+        }
+    }
+
     // BLE Delegations
     fun startBleAdvertising() {
         val pairingCode = family.value?.pairingCode ?: "DEFAULT"
@@ -229,6 +310,8 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun disconnectBle() = bleManager.disconnectGatt()
+
+    fun sendEmergencyAlert() = bleManager.sendEmergencyAlert()
 
     override fun onCleared() {
         super.onCleared()

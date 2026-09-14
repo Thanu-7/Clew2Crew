@@ -18,6 +18,7 @@ object BleUtils {
     // Protocol Messages
     const val MSG_HELLO = "CLEW2CREW_HELLO"
     const val MSG_ACK = "CLEW2CREW_ACK"
+    const val MSG_EMERGENCY = "CLEW2CREW_EMERGENCY"
 
     fun getRequiredPermissions(): Array<String> {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

@@ -41,7 +41,7 @@ fun EmergencyScreen(navController: NavController, viewModel: FamilyViewModel) {
                 text = "ALERT FAMILY",
                 description = "Notify all paired devices that you need assistance.",
                 color = Color(0xFF780000),
-                onClick = { /* Mock */ }
+                onClick = { viewModel.sendEmergencyAlert() }
             )
 
             Spacer(modifier = Modifier.height(24.dp))

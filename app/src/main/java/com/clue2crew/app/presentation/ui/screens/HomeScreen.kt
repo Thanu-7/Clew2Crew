@@ -27,8 +27,10 @@ import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
 import com.clue2crew.app.presentation.navigation.Screen
 import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
 import com.clue2crew.app.common.utils.LocationHelper
+import com.clue2crew.app.common.utils.BleUtils
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 
 @Composable
 fun HomeScreen(navController: NavController, viewModel: FamilyViewModel) {
@@ -40,9 +42,10 @@ fun HomeScreen(navController: NavController, viewModel: FamilyViewModel) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val granted = permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) ||
-                      permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
-        if (granted) {
+        val locationGranted = permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) ||
+                             permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
+        
+        if (locationGranted) {
             locationHelper.getCurrentLocation { location ->
                 location?.let { 
                     viewModel.updateCurrentDeviceLocation(it)
@@ -53,21 +56,30 @@ fun HomeScreen(navController: NavController, viewModel: FamilyViewModel) {
     }
 
     LaunchedEffect(Unit) {
-        val hasFineLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val hasCoarseLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val requiredPermissions = mutableListOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            requiredPermissions.add(Manifest.permission.BLUETOOTH_SCAN)
+            requiredPermissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+            requiredPermissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+        }
 
-        if (hasFineLocation || hasCoarseLocation) {
+        val allGranted = requiredPermissions.all {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
+
+        if (!allGranted) {
+            permissionLauncher.launch(requiredPermissions.toTypedArray())
+        } else {
             locationHelper.getCurrentLocation { location ->
                 location?.let { 
                     viewModel.updateCurrentDeviceLocation(it)
                     viewModel.updateFirstMemberLocation(it.latitude, it.longitude) 
                 }
             }
-        } else {
-            permissionLauncher.launch(arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ))
         }
     }
 
