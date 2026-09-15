@@ -19,6 +19,8 @@ fun JoinFamilyScreen(navController: NavController, viewModel: FamilyViewModel) {
     var pairingCode by remember { mutableStateOf("") }
     val family by viewModel.family.collectAsState()
     val error by viewModel.error.collectAsState()
+    val isJoining by viewModel.isJoiningInProgress.collectAsState()
+    val statusMessage by viewModel.bleStatusMessage.collectAsState()
 
     // Navigate to dashboard if family is successfully joined
     LaunchedEffect(family) {
@@ -92,18 +94,38 @@ fun JoinFamilyScreen(navController: NavController, viewModel: FamilyViewModel) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Button(
-                onClick = { 
-                    if (pairingCode.isNotEmpty()) {
-                        viewModel.joinFamily(pairingCode)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF415A77)),
-                shape = RoundedCornerShape(12.dp),
-                enabled = pairingCode.isNotEmpty()
+            if (isJoining) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(color = Color(0xFF415A77))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(text = statusMessage, color = Color.LightGray, fontSize = 14.sp)
+                }
+            } else {
+                Button(
+                    onClick = { 
+                        if (pairingCode.isNotEmpty()) {
+                            viewModel.joinFamily(pairingCode)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF415A77)),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = pairingCode.isNotEmpty()
+                ) {
+                    Text("Join Family", fontSize = 18.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            TextButton(
+                onClick = { navController.navigate(Screen.CreateFamily.route) },
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Join Family", fontSize = 18.sp)
+                Text("Don't have a family? Create One", color = Color(0xFF415A77))
             }
         }
     }

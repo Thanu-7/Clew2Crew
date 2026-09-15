@@ -105,6 +105,15 @@ fun CreateFamilyScreen(navController: NavController, viewModel: FamilyViewModel)
             ) {
                 Text("Show QR Code (Upcoming)")
             }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            TextButton(
+                onClick = { navController.navigate(Screen.JoinFamily.route) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Already have a code? Join Family", color = Color(0xFF415A77))
+            }
         }
     }
 }

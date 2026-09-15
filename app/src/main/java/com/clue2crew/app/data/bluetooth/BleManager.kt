@@ -60,8 +60,13 @@ class BleManager(private val context: Context) {
     private val _incomingLocation = MutableStateFlow<AuthProtocol.LocationData?>(null)
     val incomingLocation: StateFlow<AuthProtocol.LocationData?> = _incomingLocation.asStateFlow()
 
+    private val _pairedFamily = MutableStateFlow<AuthProtocol.ServerAuthResult?>(null)
+    val pairedFamily: StateFlow<AuthProtocol.ServerAuthResult?> = _pairedFamily.asStateFlow()
+
     private var currentPairingCode: String = ""
     private var currentMemberId: String = ""
+    private var currentFamilyId: String = ""
+    private var currentFamilyName: String = ""
     private var lastConnectedAddress: String? = null
     private var isAutoReconnectEnabled: Boolean = false
     private var reconnectionAttempts = 0
@@ -82,9 +87,11 @@ class BleManager(private val context: Context) {
 
     private val stopScanRunnable = Runnable { stopScan() }
 
-    fun setCredentials(pairingCode: String, memberId: String) {
+    fun setCredentials(pairingCode: String, memberId: String, familyId: String = "", familyName: String = "") {
         this.currentPairingCode = pairingCode
         this.currentMemberId = memberId
+        this.currentFamilyId = familyId
+        this.currentFamilyName = familyName
     }
 
     // ------------------------------------------------------------------------
@@ -248,7 +255,9 @@ class BleManager(private val context: Context) {
                     val proofServer = AuthProtocol.createServerProof(
                         serverSessionKey!!,
                         currentMemberId,
-                        cClient.toHex()
+                        cClient.toHex(),
+                        currentFamilyName,
+                        currentFamilyId
                     )
 
                     val challengeResponse = "AUTH_CHALLENGE:${serverCServer!!.toHex()}:${proofServer.toHex()}"
@@ -648,14 +657,19 @@ class BleManager(private val context: Context) {
                 val familySharedKey = KeyStoreManager.deriveFamilySharedKey(currentPairingCode)
                 clientSessionKey = KeyStoreManager.deriveSessionKey(familySharedKey, clientCClient!!, cServerBytes)
 
-                val verifiedServerMemberId = AuthProtocol.parseAndVerifyServerProof(
+                val authResult = AuthProtocol.parseAndVerifyServerProof(
                     proofServerHex.hexToByteArray(),
                     clientSessionKey!!,
                     clientCClient!!.toHex()
                 )
 
-                _lastReceivedMessage.value = "Verified Server: $verifiedServerMemberId"
-                Log.d(BleUtils.LOG_TAG, "GattClient: Server verified ($verifiedServerMemberId). Sending AUTH_CONFIRM...")
+                _lastReceivedMessage.value = "Verified Family: ${authResult.familyName}"
+                Log.d(BleUtils.LOG_TAG, "GattClient: Server verified. Family=${authResult.familyName}. Sending AUTH_CONFIRM...")
+
+                // If we don't have family info yet, this is a pairing event
+                if (currentFamilyId.isEmpty()) {
+                    _pairedFamily.value = authResult
+                }
 
                 // Send Client Proof
                 val clientProof = AuthProtocol.createClientProof(
@@ -679,8 +693,8 @@ class BleManager(private val context: Context) {
                         gatt.writeCharacteristic(char)
                     }
                     _isAuthenticated.value = true
-                    _authenticatedMemberId.value = verifiedServerMemberId
-                    _connectionState.value = "Authenticated with $verifiedServerMemberId"
+                    _authenticatedMemberId.value = authResult.memberId
+                    _connectionState.value = "Authenticated with ${authResult.memberId}"
                     updateDeviceConnectionState(gatt.device?.address ?: "", "Authenticated")
                     updateDeviceLastMessage(gatt.device?.address ?: "", "AUTH_SUCCESS")
                 }

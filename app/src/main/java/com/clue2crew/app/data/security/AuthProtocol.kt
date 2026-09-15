@@ -48,9 +48,11 @@ object AuthProtocol {
         sessionKey: SecretKey,
         serverMemberId: String,
         cClientHex: String,
+        familyName: String,
+        familyId: String,
         timestampMs: Long = System.currentTimeMillis()
     ): ByteArray {
-        val payload = "AUTH_RESP:$serverMemberId:$cClientHex:$timestampMs"
+        val payload = "AUTH_RESP:$serverMemberId:$cClientHex:$timestampMs:$familyName:$familyId"
         return CryptoManager.encrypt(payload.toByteArray(StandardCharsets.UTF_8), sessionKey)
     }
 
@@ -59,21 +61,26 @@ object AuthProtocol {
         sessionKey: SecretKey,
         expectedCClientHex: String,
         nowMs: Long = System.currentTimeMillis()
-    ): String {
+    ): ServerAuthResult {
         val decryptedBytes = CryptoManager.decrypt(encryptedProof, sessionKey)
         val decryptedStr = String(decryptedBytes, StandardCharsets.UTF_8)
         val parts = decryptedStr.split(":")
-        require(parts.size == 4 && parts[0] == "AUTH_RESP") { "Invalid AUTH_RESP format" }
+        require(parts.size >= 4 && parts[0] == "AUTH_RESP") { "Invalid AUTH_RESP format" }
 
         val serverMemberId = parts[1]
         val cClientHex = parts[2]
         val timestampMs = parts[3].toLongOrNull() ?: throw IllegalArgumentException("Invalid timestamp")
+        
+        val familyName = if (parts.size > 4) parts[4] else "Unknown Family"
+        val familyId = if (parts.size > 5) parts[5] else ""
 
-        require(cClientHex == expectedCClientHex) { "Challenge mismatch: expected $expectedCClientHex, got $cClientHex" }
-        require(Math.abs(nowMs - timestampMs) <= MAX_TIMESTAMP_DELTA_MS) { "Stale timestamp: delta=${Math.abs(nowMs - timestampMs)} ms" }
+        require(cClientHex == expectedCClientHex) { "Challenge mismatch" }
+        require(Math.abs(nowMs - timestampMs) <= MAX_TIMESTAMP_DELTA_MS) { "Stale timestamp" }
 
-        return serverMemberId
+        return ServerAuthResult(serverMemberId, familyName, familyId)
     }
+
+    data class ServerAuthResult(val memberId: String, val familyName: String, val familyId: String)
 
     // Step 3: Client Proof
     fun createClientProof(

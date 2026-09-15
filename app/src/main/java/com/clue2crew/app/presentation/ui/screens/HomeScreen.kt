@@ -108,16 +108,31 @@ fun HomeScreen(navController: NavController, viewModel: FamilyViewModel) {
                         onClick = { navController.navigate(Screen.FamilyDashboard.route) }
                     )
                 } else {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { navController.navigate(Screen.CreateFamily.route) },
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(24.dp)) {
-                            Text(text = "No Family Group", color = Color(0xFF0D1B2A), fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            Text(text = "Tap to create one", color = Color.Gray, fontSize = 14.sp)
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { navController.navigate(Screen.CreateFamily.route) },
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(24.dp)) {
+                                Text(text = "Create Family", color = Color(0xFF0D1B2A), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                Text(text = "Start a new group for your family", color = Color.Gray, fontSize = 14.sp)
+                            }
+                        }
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { navController.navigate(Screen.JoinFamily.route) },
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1B263B)),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(24.dp)) {
+                                Text(text = "Join Family", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                Text(text = "Enter a code to join an existing group", color = Color.LightGray, fontSize = 14.sp)
+                            }
                         }
                     }
                 }
