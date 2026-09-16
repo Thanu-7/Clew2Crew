@@ -117,17 +117,19 @@ class CryptoManagerTest {
         val serverProof = AuthProtocol.createServerProof(
             serverSessionKey,
             sampleMemberIdServer,
-            parsedCClient.toHex()
+            parsedCClient.toHex(),
+            "Test Family",
+            "family123"
         )
 
         // Client receives challenge & verifies server
         val clientSessionKey = KeyStoreManager.deriveSessionKey(familyKeyClient, cClient, cServer)
-        val verifiedServerMemberId = AuthProtocol.parseAndVerifyServerProof(
+        val authResult = AuthProtocol.parseAndVerifyServerProof(
             serverProof,
             clientSessionKey,
             cClient.toHex()
         )
-        assertEquals(sampleMemberIdServer, verifiedServerMemberId)
+        assertEquals(sampleMemberIdServer, authResult.memberId)
 
         // Step 3: Client -> Server Proof
         val clientProof = AuthProtocol.createClientProof(
@@ -154,7 +156,7 @@ class CryptoManagerTest {
         val cServer = AuthProtocol.generateNonce()
 
         val serverSessionKey = KeyStoreManager.deriveSessionKey(familyKeyServer, cClient, cServer)
-        val serverProof = AuthProtocol.createServerProof(serverSessionKey, sampleMemberIdServer, cClient.toHex())
+        val serverProof = AuthProtocol.createServerProof(serverSessionKey, sampleMemberIdServer, cClient.toHex(), "Family", "fam123")
 
         val clientSessionKey = KeyStoreManager.deriveSessionKey(familyKeyClient, cClient, cServer)
         // Decryption fails with wrong key
@@ -173,6 +175,8 @@ class CryptoManagerTest {
             sessionKey,
             sampleMemberIdServer,
             cClient.toHex(),
+            "Family",
+            "fam123",
             timestampMs = staleTimestamp
         )
 
@@ -196,7 +200,9 @@ class CryptoManagerTest {
         val serverProof = AuthProtocol.createServerProof(
             sessionKey,
             sampleMemberIdServer,
-            cClientOriginal.toHex()
+            cClientOriginal.toHex(),
+            "Family",
+            "fam123"
         )
 
         // Verifying server proof expecting cClientReused fails challenge check
@@ -219,7 +225,9 @@ class CryptoManagerTest {
         val fabricatedProof = AuthProtocol.createServerProof(
             fakeSessionKey,
             sampleMemberIdServer,
-            cClient.toHex()
+            cClient.toHex(),
+            "Family",
+            "fam123"
         )
 
         // Attempting to decrypt fabricated proof with real sessionKey throws AEADBadTagException

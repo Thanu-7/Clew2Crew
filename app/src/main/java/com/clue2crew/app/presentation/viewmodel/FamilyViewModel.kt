@@ -57,6 +57,9 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     private val _isJoiningInProgress = MutableStateFlow(false)
     val isJoiningInProgress: StateFlow<Boolean> = _isJoiningInProgress.asStateFlow()
 
+    private val _userName = MutableStateFlow(prefs.getString("my_user_name", "Me") ?: "Me")
+    val userName: StateFlow<String> = _userName.asStateFlow()
+
     init {
         val database = Clue2CrewDatabase.getDatabase(application)
         repository = FamilyRepository(database.familyDao(), database.familyMemberDao())
@@ -99,10 +102,10 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
             while (true) {
                 if (bleManager.isAuthenticated.value) {
                     lastKnownLocation?.let { loc ->
-                        bleManager.sendLocation(loc.latitude, loc.longitude)
+                        bleManager.sendLocation(loc.latitude, loc.longitude, loc.accuracy)
                     }
                 }
-                delay(5000) // Broadcast location every 5 seconds
+                delay(3000) // Broadcast location every 3 seconds during active session
             }
         }
 
@@ -111,6 +114,7 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
             bleManager.pairedFamily.collect { authResult ->
                 if (authResult != null && family.value == null) {
                     val myId = prefs.getString("my_member_id", "") ?: ""
+                    val savedUserName = prefs.getString("my_user_name", "Me") ?: "Me"
                     try {
                         val newFamily = FamilyEntity(
                             familyId = authResult.familyId,
@@ -123,7 +127,7 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
                         val me = FamilyMemberEntity(
                             memberId = myId,
                             familyId = authResult.familyId,
-                            name = "Me",
+                            name = savedUserName,
                             deviceId = android.os.Build.MODEL,
                             status = "Connected",
                             latitude = lastKnownLocation?.latitude,
@@ -167,11 +171,21 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun createFamily(name: String) {
-        if (name.isBlank()) {
+    fun createFamily(familyName: String, userNameInput: String = "") {
+        val trimmedFamilyName = familyName.trim()
+        if (trimmedFamilyName.isBlank()) {
             _error.value = "Family name cannot be empty."
             return
         }
+
+        val cleanUserName = if (userNameInput.isBlank()) {
+            prefs.getString("my_user_name", "Me") ?: "Me"
+        } else {
+            userNameInput.trim()
+        }
+
+        prefs.edit().putString("my_user_name", cleanUserName).apply()
+        _userName.value = cleanUserName
 
         val familyId = UUID.randomUUID().toString()
         val pairingCode = generatePairingCode()
@@ -181,7 +195,7 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 val newFamily = FamilyEntity(
                     familyId = familyId,
-                    familyName = name.trim(),
+                    familyName = trimmedFamilyName,
                     pairingCode = pairingCode,
                     createdAt = System.currentTimeMillis()
                 )
@@ -191,7 +205,7 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
                 val me = FamilyMemberEntity(
                     memberId = myId,
                     familyId = familyId,
-                    name = "Me",
+                    name = cleanUserName,
                     deviceId = android.os.Build.MODEL,
                     status = "Connected",
                     latitude = lastKnownLocation?.latitude,
@@ -206,51 +220,30 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun joinFamily(pairingCode: String) {
+    fun initiateJoinProcess(pairingCode: String, userNameInput: String = "") {
         val code = pairingCode.trim().uppercase()
         if (code.isBlank()) {
             _error.value = "Please enter a pairing code."
             return
         }
 
-        val myId = prefs.getString("my_member_id", "") ?: ""
-        viewModelScope.launch {
-            try {
-                val targetFamily = repository.getFamilyByPairingCode(code)
-                if (targetFamily != null) {
-                    // Already exists locally (re-joining or owner)
-                    val existingMember = repository.getMember(myId, targetFamily.familyId)
-                    if (existingMember != null) {
-                        _error.value = "You are already a member of this family."
-                        return@launch
-                    }
-
-                    val me = FamilyMemberEntity(
-                        memberId = myId,
-                        familyId = targetFamily.familyId,
-                        name = "Me",
-                        deviceId = android.os.Build.MODEL,
-                        status = "Connected",
-                        latitude = lastKnownLocation?.latitude,
-                        longitude = lastKnownLocation?.longitude,
-                        isMe = true
-                    )
-                    repository.addMember(me)
-                    _error.value = null
-                } else {
-                    // TRUE OFFLINE JOIN: Family not in DB, search via BLE
-                    _isJoiningInProgress.value = true
-                    _statusMessage.value = "Searching for family with code $code..."
-                    prefs.edit().putString("temp_pairing_code", code).apply()
-                    
-                    // Set credentials in BleManager to allow authentication once found
-                    bleManager.setCredentials(code, myId)
-                    startBleScan(30000) // Scan for 30 seconds
-                }
-            } catch (e: Exception) {
-                _error.value = "Join failed: ${e.localizedMessage}"
-            }
+        val cleanUserName = if (userNameInput.isBlank()) {
+            prefs.getString("my_user_name", "Me") ?: "Me"
+        } else {
+            userNameInput.trim()
         }
+
+        prefs.edit().putString("my_user_name", cleanUserName).apply()
+        _userName.value = cleanUserName
+
+        val myId = prefs.getString("my_member_id", "") ?: ""
+        
+        _isJoiningInProgress.value = true
+        _statusMessage.value = "Searching for family with code $code..."
+        prefs.edit().putString("temp_pairing_code", code).apply()
+        
+        bleManager.setCredentials(code, myId)
+        startBleScan(30000) // Scan for 30 seconds
     }
 
     private fun generatePairingCode(): String {

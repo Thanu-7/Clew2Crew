@@ -5,10 +5,9 @@ import kotlin.math.*
 object LocationUtils {
 
     /**
-     * Calculates the distance between two points using the Haversine formula.
-     * Returns a formatted string (e.g., "250 m" or "1.2 km").
+     * Calculates the exact distance between two points in meters using the Haversine formula.
      */
-    fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): String {
+    fun calculateDistanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val r = 6371e3 // Earth's radius in meters
         val phi1 = lat1 * PI / 180
         val phi2 = lat2 * PI / 180
@@ -20,8 +19,22 @@ object LocationUtils {
                 sin(deltaLambda / 2) * sin(deltaLambda / 2)
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
 
-        val distance = r * c // in meters
+        return r * c
+    }
 
+    /**
+     * Reunited threshold check (distance <= 10.0 meters).
+     */
+    fun isReunited(distanceMeters: Double): Boolean {
+        return distanceMeters <= 10.0
+    }
+
+    /**
+     * Calculates the distance between two points using the Haversine formula.
+     * Returns a formatted string (e.g., "250 m" or "1.2 km").
+     */
+    fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): String {
+        val distance = calculateDistanceMeters(lat1, lon1, lat2, lon2)
         return if (distance < 1000) {
             "${distance.roundToInt()} m"
         } else {
@@ -46,10 +59,19 @@ object LocationUtils {
     }
 
     /**
-     * Converts a bearing degree into a cardinal direction string.
+     * Converts a bearing degree into a short 8-cardinal direction string (N, NE, E, SE, S, SW, W, NW).
      */
     fun getCardinalDirection(bearing: Float): String {
-        val directions = arrayOf("NORTH", "NORTH-EAST", "EAST", "SOUTH-EAST", "SOUTH", "SOUTH-WEST", "WEST", "NORTH-WEST")
+        val directions = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+        val index = ((bearing + 22.5) % 360 / 45).toInt()
+        return directions[index]
+    }
+
+    /**
+     * Converts a bearing degree into a full cardinal direction string (North, Northeast, etc.).
+     */
+    fun getFullCardinalDirection(bearing: Float): String {
+        val directions = arrayOf("North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest")
         val index = ((bearing + 22.5) % 360 / 45).toInt()
         return directions[index]
     }

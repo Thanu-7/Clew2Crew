@@ -16,6 +16,8 @@ import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
 
 @Composable
 fun CreateFamilyScreen(navController: NavController, viewModel: FamilyViewModel) {
+    val savedUserName by viewModel.userName.collectAsState()
+    var userName by remember { mutableStateOf(if (savedUserName == "Me") "" else savedUserName) }
     var familyName by remember { mutableStateOf("") }
     val family by viewModel.family.collectAsState()
     val error by viewModel.error.collectAsState()
@@ -49,12 +51,30 @@ fun CreateFamilyScreen(navController: NavController, viewModel: FamilyViewModel)
                 fontWeight = FontWeight.Bold
             )
             
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            OutlinedTextField(
+                value = userName,
+                onValueChange = { userName = it },
+                label = { Text("Your Name", color = Color.Gray) },
+                placeholder = { Text("e.g. Alice", color = Color.DarkGray) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = Color(0xFF415A77),
+                    unfocusedBorderColor = Color.Gray
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
                 value = familyName,
                 onValueChange = { familyName = it },
                 label = { Text("Family Group Name", color = Color.Gray) },
+                placeholder = { Text("e.g. Smith Family", color = Color.DarkGray) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
@@ -80,39 +100,15 @@ fun CreateFamilyScreen(navController: NavController, viewModel: FamilyViewModel)
             Button(
                 onClick = { 
                     if (familyName.isNotEmpty()) {
-                        viewModel.createFamily(familyName)
+                        viewModel.createFamily(familyName, userName)
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF415A77)),
                 shape = RoundedCornerShape(12.dp),
-                enabled = familyName.isNotEmpty()
+                enabled = familyName.isNotBlank()
             ) {
                 Text("Create Family", fontSize = 18.sp)
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Text(text = "Sharing Options (Post-Creation)", color = Color.Gray, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedButton(
-                onClick = { /* Future Implementation */ },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                enabled = false
-            ) {
-                Text("Show QR Code (Upcoming)")
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            TextButton(
-                onClick = { navController.navigate(Screen.JoinFamily.route) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Already have a code? Join Family", color = Color(0xFF415A77))
             }
         }
     }

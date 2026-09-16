@@ -120,9 +120,10 @@ object AuthProtocol {
         memberId: String,
         latitude: Double,
         longitude: Double,
+        accuracy: Float = 0f,
         timestampMs: Long = System.currentTimeMillis()
     ): ByteArray {
-        val payload = "LOC:$memberId:$latitude:$longitude:$timestampMs"
+        val payload = "LOC:$memberId:$latitude:$longitude:$accuracy:$timestampMs"
         return CryptoManager.encrypt(payload.toByteArray(StandardCharsets.UTF_8), sessionKey)
     }
 
@@ -134,17 +135,24 @@ object AuthProtocol {
         val decryptedBytes = CryptoManager.decrypt(encryptedPacket, sessionKey)
         val decryptedStr = String(decryptedBytes, StandardCharsets.UTF_8)
         val parts = decryptedStr.split(":")
-        require(parts.size == 5 && parts[0] == "LOC") { "Invalid Location Packet format" }
+        require(parts.size >= 5 && parts[0] == "LOC") { "Invalid Location Packet format" }
 
         val memberId = parts[1]
         val lat = parts[2].toDouble()
         val lon = parts[3].toDouble()
-        val timestampMs = parts[4].toLong()
+        val accuracy = if (parts.size >= 6) parts[4].toFloat() else 0f
+        val timestampMs = if (parts.size >= 6) parts[5].toLong() else parts[4].toLong()
 
         require(Math.abs(nowMs - timestampMs) <= MAX_TIMESTAMP_DELTA_MS) { "Stale location packet" }
 
-        return LocationData(memberId, lat, lon, timestampMs)
+        return LocationData(memberId, lat, lon, accuracy, timestampMs)
     }
 
-    data class LocationData(val memberId: String, val latitude: Double, val longitude: Double, val timestampMs: Long)
+    data class LocationData(
+        val memberId: String,
+        val latitude: Double,
+        val longitude: Double,
+        val accuracy: Float = 0f,
+        val timestampMs: Long
+    )
 }

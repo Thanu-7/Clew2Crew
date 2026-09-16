@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.clue2crew.app.common.utils.BleUtils
+import com.clue2crew.app.common.utils.LocationUtils
 import com.clue2crew.app.data.bluetooth.DiscoveredDevice
 import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
 import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
@@ -41,6 +42,10 @@ fun OfflineTransferScreen(navController: NavController, viewModel: FamilyViewMod
     val statusMessage by viewModel.bleStatusMessage.collectAsState()
     val isAuthenticated by viewModel.isBleAuthenticated.collectAsState()
     val authenticatedMemberId by viewModel.authenticatedMemberId.collectAsState()
+
+    val myLocation by viewModel.currentDeviceLocation.collectAsState()
+    val incomingLocation by viewModel.incomingBleLocation.collectAsState()
+    val members by viewModel.members.collectAsState()
 
     var hasPermissions by remember { mutableStateOf(BleUtils.hasBluetoothPermissions(context)) }
 
@@ -60,13 +65,13 @@ fun OfflineTransferScreen(navController: NavController, viewModel: FamilyViewMod
         ) {
             item {
                 Text(
-                    text = "BLE Offline Transfer",
+                    text = "Offline Reunification",
                     color = Color.White,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Direct Device-to-Device Communication",
+                    text = "Encrypted BLE Location Exchange",
                     color = Color.LightGray,
                     fontSize = 14.sp
                 )
@@ -100,6 +105,107 @@ fun OfflineTransferScreen(navController: NavController, viewModel: FamilyViewMod
                             ) {
                                 Text("Grant Permissions", color = Color(0xFF780000), fontWeight = FontWeight.Bold)
                             }
+                        }
+                    }
+                }
+            }
+
+            // Reunification Live Banner (if locations exist)
+            item {
+                val locRemote = incomingLocation
+                val locMy = myLocation
+
+                if (locMy != null && locRemote != null) {
+                    val distMeters = LocationUtils.calculateDistanceMeters(
+                        locMy.latitude, locMy.longitude,
+                        locRemote.latitude, locRemote.longitude
+                    )
+                    val distFormatted = LocationUtils.calculateDistance(
+                        locMy.latitude, locMy.longitude,
+                        locRemote.latitude, locRemote.longitude
+                    )
+                    val bearing = LocationUtils.calculateBearing(
+                        locMy.latitude, locMy.longitude,
+                        locRemote.latitude, locRemote.longitude
+                    )
+                    val cardinal = LocationUtils.getCardinalDirection(bearing)
+                    val fullCardinal = LocationUtils.getFullCardinalDirection(bearing)
+                    val isReunited = LocationUtils.isReunited(distMeters)
+
+                    val remoteMember = members.find { it.memberId == locRemote.memberId }
+                    val remoteName = remoteMember?.name ?: "Family Member"
+
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isReunited) Color(0xFF1B5E20) else Color(0xFF1B263B)
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            if (isReunited) {
+                                Text(
+                                    text = "REUNITED",
+                                    color = Color.Green,
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                                Text(
+                                    text = "Family member is nearby!",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
+
+                            Text(
+                                text = "Family Member: $remoteName",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = "Distance", color = Color.LightGray, fontSize = 12.sp)
+                                    Text(text = distFormatted, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                                }
+
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = "Direction", color = Color.LightGray, fontSize = 12.sp)
+                                    Text(text = "$cardinal ($fullCardinal)", color = Color(0xFF415A77), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "GPS Accuracy: ±${locMy.accuracy.toInt()}m (My) • ±${locRemote.accuracy.toInt()}m (Remote)",
+                                color = Color.Gray,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                } else if (isAuthenticated) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B263B)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = if (locMy == null) "Waiting for local GPS fix..." else "Waiting for remote location packet over BLE...",
+                                color = Color.LightGray,
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }

@@ -16,6 +16,8 @@ import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
 
 @Composable
 fun JoinFamilyScreen(navController: NavController, viewModel: FamilyViewModel) {
+    val savedUserName by viewModel.userName.collectAsState()
+    var userName by remember { mutableStateOf(if (savedUserName == "Me") "" else savedUserName) }
     var pairingCode by remember { mutableStateOf("") }
     val family by viewModel.family.collectAsState()
     val error by viewModel.error.collectAsState()
@@ -51,27 +53,30 @@ fun JoinFamilyScreen(navController: NavController, viewModel: FamilyViewModel) {
                 fontWeight = FontWeight.Bold
             )
             
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            Button(
-                onClick = { /* Mock QR Scan */ },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B263B)),
+            OutlinedTextField(
+                value = userName,
+                onValueChange = { userName = it },
+                label = { Text("Your Name", color = Color.Gray) },
+                placeholder = { Text("e.g. Bob", color = Color.DarkGray) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = Color(0xFF415A77),
+                    unfocusedBorderColor = Color.Gray
+                ),
                 shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Scan Family QR", fontSize = 18.sp)
-            }
+            )
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(text = "OR", color = Color.Gray, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
                 value = pairingCode,
                 onValueChange = { pairingCode = it.uppercase() },
-                label = { Text("Enter Pairing Code", color = Color.Gray) },
+                label = { Text("Family ID or Pairing Code", color = Color.Gray) },
+                placeholder = { Text("e.g. AB3DX9", color = Color.DarkGray) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
@@ -106,26 +111,18 @@ fun JoinFamilyScreen(navController: NavController, viewModel: FamilyViewModel) {
             } else {
                 Button(
                     onClick = { 
-                        if (pairingCode.isNotEmpty()) {
-                            viewModel.joinFamily(pairingCode)
+                        if (pairingCode.isNotBlank() && userName.isNotBlank()) {
+                            viewModel.initiateJoinProcess(pairingCode, userName)
+                            navController.navigate(Screen.OfflineTransfer.route)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF415A77)),
                     shape = RoundedCornerShape(12.dp),
-                    enabled = pairingCode.isNotEmpty()
+                    enabled = pairingCode.isNotBlank() && userName.isNotBlank()
                 ) {
-                    Text("Join Family", fontSize = 18.sp)
+                    Text("SEND", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            TextButton(
-                onClick = { navController.navigate(Screen.CreateFamily.route) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Don't have a family? Create One", color = Color(0xFF415A77))
             }
         }
     }

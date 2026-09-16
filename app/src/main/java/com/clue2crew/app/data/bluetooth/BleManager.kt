@@ -198,7 +198,7 @@ class BleManager(private val context: Context) {
 
             gattServer = bluetoothManager?.openGattServer(context, gattServerCallback)
             gattServer?.addService(service)
-            Log.d(BleUtils.LOG_TAG, "Opened GATT Server and added Clew2Crew service")
+            Log.d(BleUtils.LOG_TAG, "Opened GATT Server and added Clew2Crew service ${BleUtils.SERVICE_UUID}")
         } catch (e: SecurityException) {
             Log.e(BleUtils.LOG_TAG, "SecurityException opening GATT Server", e)
         }
@@ -219,7 +219,7 @@ class BleManager(private val context: Context) {
     private val gattServerCallback = object : BluetoothGattServerCallback() {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(device: BluetoothDevice?, status: Int, newState: Int) {
-            Log.d(BleUtils.LOG_TAG, "GATT Server ConnectionStateChange: device=${device?.address}, newState=$newState")
+            Log.d(BleUtils.LOG_TAG, "GATT Server ConnectionStateChange: device=${device?.address}, newState=$newState, status=$status")
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 _connectionState.value = "Server: Device Connected (${device?.address})"
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
@@ -227,6 +227,24 @@ class BleManager(private val context: Context) {
                 _isAuthenticated.value = false
                 _authenticatedMemberId.value = null
                 serverSessionKey = null
+            }
+        }
+
+        @SuppressLint("MissingPermission")
+        override fun onCharacteristicReadRequest(
+            device: BluetoothDevice?,
+            requestId: Int,
+            offset: Int,
+            characteristic: BluetoothGattCharacteristic?
+        ) {
+            Log.d(BleUtils.LOG_TAG, "GATT Server onCharacteristicReadRequest from ${device?.address}, char=${characteristic?.uuid}")
+            val value = characteristic?.value ?: byteArrayOf()
+            try {
+                if (device != null) {
+                    gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
+                }
+            } catch (e: SecurityException) {
+                Log.e(BleUtils.LOG_TAG, "SecurityException in onCharacteristicReadRequest", e)
             }
         }
 
@@ -241,13 +259,15 @@ class BleManager(private val context: Context) {
             value: ByteArray?
         ) {
             val receivedMsg = value?.let { String(it, Charsets.UTF_8) } ?: ""
-            Log.d(BleUtils.LOG_TAG, "GATT Server received write from ${device?.address}: $receivedMsg")
+            Log.d(BleUtils.LOG_TAG, "GATT Server received write from ${device?.address}: $receivedMsg (char=${characteristic?.uuid})")
 
             if (receivedMsg.startsWith("AUTH_INIT:")) {
                 try {
                     val (cClient, clientMemberId) = AuthProtocol.parseAuthInit(receivedMsg)
                     serverCClient = cClient
                     serverCServer = AuthProtocol.generateNonce()
+
+                    Log.d(BleUtils.LOG_TAG, "GATT Server: Parsed AUTH_INIT. clientMemberId=$clientMemberId, cClientHex=${cClient.toHex()}")
 
                     val familySharedKey = KeyStoreManager.deriveFamilySharedKey(currentPairingCode)
                     serverSessionKey = KeyStoreManager.deriveSessionKey(familySharedKey, cClient, serverCServer!!)
@@ -264,16 +284,27 @@ class BleManager(private val context: Context) {
                     _lastReceivedMessage.value = "AUTH_INIT from $clientMemberId"
                     _connectionState.value = "Server: Sent AUTH_CHALLENGE"
 
+                    characteristic?.value = challengeResponse.toByteArray(Charsets.UTF_8)
+
                     if (responseNeeded && device != null) {
                         gattServer?.sendResponse(
                             device,
                             requestId,
                             BluetoothGatt.GATT_SUCCESS,
                             offset,
-                            challengeResponse.toByteArray(Charsets.UTF_8)
+                            null
                         )
                     }
-                    Log.d(BleUtils.LOG_TAG, "GATT Server sent AUTH_CHALLENGE to ${device?.address}")
+
+                    // Notify connected client with challengeResponse
+                    if (characteristic != null && device != null) {
+                        try {
+                            gattServer?.notifyCharacteristicChanged(device, characteristic, false)
+                            Log.d(BleUtils.LOG_TAG, "GATT Server notified AUTH_CHALLENGE to ${device.address}")
+                        } catch (e: SecurityException) {
+                            Log.e(BleUtils.LOG_TAG, "SecurityException notifying characteristic", e)
+                        }
+                    }
                 } catch (e: Exception) {
                     Log.e(BleUtils.LOG_TAG, "GATT Server: Failed AUTH_INIT processing", e)
                     _statusMessage.value = "Server Auth Failed: ${e.message}"
@@ -296,14 +327,25 @@ class BleManager(private val context: Context) {
                     _lastReceivedMessage.value = "AUTH_SUCCESS from $verifiedClientId"
                     _connectionState.value = "Server: Authenticated with $verifiedClientId"
 
+                    characteristic?.value = "AUTH_SUCCESS".toByteArray(Charsets.UTF_8)
+
                     if (responseNeeded && device != null) {
                         gattServer?.sendResponse(
                             device,
                             requestId,
                             BluetoothGatt.GATT_SUCCESS,
                             offset,
-                            "AUTH_SUCCESS".toByteArray(Charsets.UTF_8)
+                            null
                         )
+                    }
+
+                    if (characteristic != null && device != null) {
+                        try {
+                            gattServer?.notifyCharacteristicChanged(device, characteristic, false)
+                            Log.d(BleUtils.LOG_TAG, "GATT Server notified AUTH_SUCCESS to ${device.address}")
+                        } catch (e: SecurityException) {
+                            Log.e(BleUtils.LOG_TAG, "SecurityException notifying characteristic", e)
+                        }
                     }
                     Log.d(BleUtils.LOG_TAG, "GATT Server: Successfully Authenticated Client ($verifiedClientId)")
                 } catch (e: Exception) {
@@ -314,7 +356,6 @@ class BleManager(private val context: Context) {
                     }
                 }
             } else if (receivedMsg.startsWith("LOC_ENC:")) {
-                // Handle Encrypted Location Packet from Client
                 try {
                     val encryptedHex = receivedMsg.substringAfter("LOC_ENC:")
                     val sKey = serverSessionKey ?: throw IllegalArgumentException("No session key")
@@ -329,7 +370,6 @@ class BleManager(private val context: Context) {
                     Log.e(BleUtils.LOG_TAG, "GATT Server: Failed to parse location packet", e)
                 }
             } else if (receivedMsg.startsWith("ALERT_ENC:")) {
-                // Handle Emergency Alert from Client
                 try {
                     val encryptedHex = receivedMsg.substringAfter("ALERT_ENC:")
                     val sKey = serverSessionKey ?: throw IllegalArgumentException("No session key")
@@ -512,14 +552,20 @@ class BleManager(private val context: Context) {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
             val address = gatt?.device?.address ?: ""
+            Log.d(BleUtils.LOG_TAG, "GattClient: onConnectionStateChange status=$status, newState=$newState, address=$address")
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                Log.d(BleUtils.LOG_TAG, "GattClient: Connected to $address. Discovering services...")
+                Log.d(BleUtils.LOG_TAG, "GattClient: Connected to $address. Requesting MTU 512...")
                 _connectionState.value = "Connected to $address"
                 updateDeviceConnectionState(address, "Connected")
                 try {
-                    gatt?.discoverServices()
+                    gatt?.requestMtu(512)
                 } catch (e: SecurityException) {
-                    Log.e(BleUtils.LOG_TAG, "SecurityException discovering services", e)
+                    Log.e(BleUtils.LOG_TAG, "SecurityException requesting MTU, falling back to discoverServices", e)
+                    try {
+                        gatt?.discoverServices()
+                    } catch (se: SecurityException) {
+                        Log.e(BleUtils.LOG_TAG, "SecurityException discovering services", se)
+                    }
                 }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 Log.d(BleUtils.LOG_TAG, "GattClient: Disconnected from $address")
@@ -535,7 +581,6 @@ class BleManager(private val context: Context) {
                 }
                 if (activeGatt == gatt) activeGatt = null
 
-                // Reconnection Logic
                 if (isAutoReconnectEnabled && lastConnectedAddress == address && reconnectionAttempts < MAX_RECONNECT_ATTEMPTS) {
                     reconnectionAttempts++
                     _statusMessage.value = "Connection lost. Reconnecting... ($reconnectionAttempts/$MAX_RECONNECT_ATTEMPTS)"
@@ -550,14 +595,24 @@ class BleManager(private val context: Context) {
         }
 
         @SuppressLint("MissingPermission")
+        override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
+            Log.d(BleUtils.LOG_TAG, "GattClient: onMtuChanged mtu=$mtu, status=$status. Discovering services...")
+            try {
+                gatt?.discoverServices()
+            } catch (e: SecurityException) {
+                Log.e(BleUtils.LOG_TAG, "SecurityException discovering services after MTU change", e)
+            }
+        }
+
+        @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
+            Log.d(BleUtils.LOG_TAG, "GattClient: onServicesDiscovered status=$status")
             if (status == BluetoothGatt.GATT_SUCCESS && gatt != null) {
-                Log.d(BleUtils.LOG_TAG, "GattClient: Services discovered. Starting Auth Handshake...")
                 val service = gatt.getService(BleUtils.SERVICE_UUID)
                 if (service != null) {
                     val char = service.getCharacteristic(BleUtils.CHARACTERISTIC_UUID)
                     if (char != null) {
-                        // Enable notifications to receive data from server
+                        Log.d(BleUtils.LOG_TAG, "GattClient: Enabling notifications for ${BleUtils.CHARACTERISTIC_UUID}")
                         gatt.setCharacteristicNotification(char, true)
                         val descriptor = char.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
                         if (descriptor != null) {
@@ -569,9 +624,10 @@ class BleManager(private val context: Context) {
                                 @Suppress("DEPRECATION")
                                 gatt.writeDescriptor(descriptor)
                             }
+                        } else {
+                            // Fallback if descriptor is null: start handshake directly
+                            startAuthenticationHandshake(gatt, char)
                         }
-
-                        startAuthenticationHandshake(gatt, char)
                     } else {
                         Log.e(BleUtils.LOG_TAG, "GattClient: Characteristic not found")
                     }
@@ -584,21 +640,31 @@ class BleManager(private val context: Context) {
         }
 
         @SuppressLint("MissingPermission")
-        override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.d(BleUtils.LOG_TAG, "GattClient: Successfully wrote AUTH packet")
-                // After writing a request, we often need to read the response from the server
-                if (characteristic != null) {
-                    gatt?.readCharacteristic(characteristic)
+        override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
+            Log.d(BleUtils.LOG_TAG, "GattClient: onDescriptorWrite status=$status, desc=${descriptor?.uuid}")
+            if (status == BluetoothGatt.GATT_SUCCESS && gatt != null) {
+                val service = gatt.getService(BleUtils.SERVICE_UUID)
+                val char = service?.getCharacteristic(BleUtils.CHARACTERISTIC_UUID)
+                if (char != null) {
+                    startAuthenticationHandshake(gatt, char)
                 }
             } else {
+                Log.e(BleUtils.LOG_TAG, "GattClient: Descriptor write failed status=$status")
+            }
+        }
+
+        @SuppressLint("MissingPermission")
+        override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
+            Log.d(BleUtils.LOG_TAG, "GattClient: onCharacteristicWrite status=$status, char=${characteristic?.uuid}")
+            if (status != BluetoothGatt.GATT_SUCCESS) {
                 Log.e(BleUtils.LOG_TAG, "GattClient: Characteristic write failed status=$status")
-                _statusMessage.value = "Client Write Failed"
+                _statusMessage.value = "Client Write Failed ($status)"
             }
         }
 
         @Suppress("DEPRECATION")
         override fun onCharacteristicRead(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
+            Log.d(BleUtils.LOG_TAG, "GattClient: onCharacteristicRead status=$status")
             if (status == BluetoothGatt.GATT_SUCCESS && characteristic != null) {
                 val valueStr = String(characteristic.value ?: byteArrayOf(), Charsets.UTF_8)
                 handleServerResponse(gatt, valueStr)
@@ -606,6 +672,7 @@ class BleManager(private val context: Context) {
         }
 
         override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+            Log.d(BleUtils.LOG_TAG, "GattClient: onCharacteristicRead (API 33+) status=$status")
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 val valueStr = String(value, Charsets.UTF_8)
                 handleServerResponse(gatt, valueStr)
@@ -614,6 +681,7 @@ class BleManager(private val context: Context) {
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
             val valueStr = String(value, Charsets.UTF_8)
+            Log.d(BleUtils.LOG_TAG, "GattClient: onCharacteristicChanged value=$valueStr")
             handleServerResponse(gatt, valueStr)
         }
     }
@@ -623,6 +691,8 @@ class BleManager(private val context: Context) {
         clientCClient = AuthProtocol.generateNonce()
         val authInitMsg = AuthProtocol.createAuthInit(clientCClient!!, currentMemberId)
         val bytes = authInitMsg.toByteArray(Charsets.UTF_8)
+
+        Log.d(BleUtils.LOG_TAG, "GattClient: Starting Auth Handshake with msg=$authInitMsg, currentMemberId=$currentMemberId")
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -635,7 +705,7 @@ class BleManager(private val context: Context) {
                 @Suppress("DEPRECATION")
                 gatt.writeCharacteristic(characteristic)
             }
-            Log.d(BleUtils.LOG_TAG, "GattClient: Triggered AUTH_INIT write")
+            Log.d(BleUtils.LOG_TAG, "GattClient: Successfully triggered AUTH_INIT writeCharacteristic")
             _connectionState.value = "Handshake: Sent AUTH_INIT"
         } catch (e: SecurityException) {
             Log.e(BleUtils.LOG_TAG, "SecurityException sending AUTH_INIT", e)
@@ -644,6 +714,7 @@ class BleManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     private fun handleServerResponse(gatt: BluetoothGatt?, responseStr: String) {
+        Log.d(BleUtils.LOG_TAG, "GattClient handleServerResponse: $responseStr")
         if (responseStr.startsWith("AUTH_CHALLENGE:")) {
             try {
                 val parts = responseStr.split(":")
@@ -653,6 +724,8 @@ class BleManager(private val context: Context) {
                 val proofServerHex = parts[2]
                 val cServerBytes = cServerHex.hexToByteArray()
                 clientCServer = cServerBytes
+
+                Log.d(BleUtils.LOG_TAG, "GattClient: Parsed AUTH_CHALLENGE cServerHex=$cServerHex")
 
                 val familySharedKey = KeyStoreManager.deriveFamilySharedKey(currentPairingCode)
                 clientSessionKey = KeyStoreManager.deriveSessionKey(familySharedKey, clientCClient!!, cServerBytes)
@@ -664,14 +737,12 @@ class BleManager(private val context: Context) {
                 )
 
                 _lastReceivedMessage.value = "Verified Family: ${authResult.familyName}"
-                Log.d(BleUtils.LOG_TAG, "GattClient: Server verified. Family=${authResult.familyName}. Sending AUTH_CONFIRM...")
+                Log.d(BleUtils.LOG_TAG, "GattClient: Server verified! Family=${authResult.familyName}, memberId=${authResult.memberId}. Sending AUTH_CONFIRM...")
 
-                // If we don't have family info yet, this is a pairing event
                 if (currentFamilyId.isEmpty()) {
                     _pairedFamily.value = authResult
                 }
 
-                // Send Client Proof
                 val clientProof = AuthProtocol.createClientProof(
                     clientSessionKey!!,
                     currentMemberId,
@@ -704,8 +775,11 @@ class BleManager(private val context: Context) {
                 _connectionState.value = "Auth Failed"
                 disconnectGatt()
             }
+        } else if (responseStr.startsWith("AUTH_SUCCESS")) {
+            _isAuthenticated.value = true
+            _connectionState.value = "Authenticated (Server Confirmed)"
+            Log.d(BleUtils.LOG_TAG, "GattClient: Received AUTH_SUCCESS confirmation from server")
         } else if (responseStr.startsWith("LOC_ENC:")) {
-            // Handle Encrypted Location Packet from Server (via notification or read)
             try {
                 val encryptedHex = responseStr.substringAfter("LOC_ENC:")
                 val cKey = clientSessionKey ?: throw IllegalArgumentException("No session key")
@@ -716,7 +790,6 @@ class BleManager(private val context: Context) {
                 Log.e(BleUtils.LOG_TAG, "GattClient: Failed to parse location packet", e)
             }
         } else if (responseStr.startsWith("ALERT_ENC:")) {
-            // Handle Emergency Alert from Server
             try {
                 val encryptedHex = responseStr.substringAfter("ALERT_ENC:")
                 val cKey = clientSessionKey ?: throw IllegalArgumentException("No session key")
@@ -731,22 +804,21 @@ class BleManager(private val context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    fun sendLocation(latitude: Double, longitude: Double) {
+    fun sendLocation(latitude: Double, longitude: Double, accuracy: Float = 0f) {
         val sKey = if (activeGatt != null) clientSessionKey else serverSessionKey
         val memberId = currentMemberId
-        
+
         if (sKey == null || !_isAuthenticated.value) {
             Log.e(BleUtils.LOG_TAG, "Cannot send location: Not authenticated")
             return
         }
 
         try {
-            val packet = AuthProtocol.createLocationPacket(sKey, memberId, latitude, longitude)
+            val packet = AuthProtocol.createLocationPacket(sKey, memberId, latitude, longitude, accuracy)
             val msg = "LOC_ENC:${packet.toHex()}"
             val bytes = msg.toByteArray(Charsets.UTF_8)
 
             if (activeGatt != null) {
-                // Client role: Write to server
                 val service = activeGatt?.getService(BleUtils.SERVICE_UUID)
                 val char = service?.getCharacteristic(BleUtils.CHARACTERISTIC_UUID)
                 if (char != null) {
@@ -763,7 +835,6 @@ class BleManager(private val context: Context) {
                     Log.d(BleUtils.LOG_TAG, "GattClient: Sent encrypted location")
                 }
             } else if (gattServer != null) {
-                // Server role: Notify all connected clients
                 val service = gattServer?.getService(BleUtils.SERVICE_UUID)
                 val char = service?.getCharacteristic(BleUtils.CHARACTERISTIC_UUID)
                 if (char != null) {
