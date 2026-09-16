@@ -17,10 +17,4 @@ interface FamilyDao {
 
     @Query("SELECT * FROM families WHERE pairingCode = :pairingCode LIMIT 1")
     suspend fun getFamilyByPairingCode(pairingCode: String): FamilyEntity?
-
-    @Query("SELECT * FROM families WHERE syncStatus = 'PENDING' OR syncStatus = 'FAILED'")
-    suspend fun getPendingFamilies(): List<FamilyEntity>
-
-    @Query("UPDATE families SET syncStatus = :status WHERE familyId = :id")
-    suspend fun updateSyncStatus(id: String, status: String)
 }

@@ -59,7 +59,7 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         val database = Clue2CrewDatabase.getDatabase(application)
-        repository = FamilyRepository(database.familyDao(), database.familyMemberDao(), application)
+        repository = FamilyRepository(database.familyDao(), database.familyMemberDao())
 
         // Ensure stable device identity
         if (prefs.getString("my_member_id", null) == null) {

@@ -8,7 +8,5 @@ data class FamilyEntity(
     @PrimaryKey val familyId: String,
     val familyName: String,
     val pairingCode: String,
-    val createdAt: Long,
-    val syncStatus: SyncStatus = SyncStatus.PENDING,
-    val lastUpdated: Long = System.currentTimeMillis()
+    val createdAt: Long
 )

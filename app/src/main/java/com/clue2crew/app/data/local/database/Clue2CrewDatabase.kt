@@ -9,7 +9,7 @@ import com.clue2crew.app.data.local.dao.FamilyMemberDao
 import com.clue2crew.app.data.local.entities.FamilyEntity
 import com.clue2crew.app.data.local.entities.FamilyMemberEntity
 
-@Database(entities = [FamilyEntity::class, FamilyMemberEntity::class], version = 5, exportSchema = false)
+@Database(entities = [FamilyEntity::class, FamilyMemberEntity::class], version = 4, exportSchema = false)
 abstract class Clue2CrewDatabase : RoomDatabase() {
     abstract fun familyDao(): FamilyDao
     abstract fun familyMemberDao(): FamilyMemberDao

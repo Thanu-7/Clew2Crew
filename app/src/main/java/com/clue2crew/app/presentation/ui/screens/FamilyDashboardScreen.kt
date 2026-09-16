@@ -25,7 +25,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clue2crew.app.data.local.entities.FamilyMemberEntity
-import com.clue2crew.app.data.local.entities.SyncStatus
 import com.clue2crew.app.presentation.viewmodel.FamilyViewModel
 import com.clue2crew.app.presentation.navigation.Screen
 import com.clue2crew.app.presentation.ui.components.Clue2CrewScaffold
@@ -57,18 +56,12 @@ fun FamilyDashboardScreen(navController: NavController, viewModel: FamilyViewMod
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = family?.familyName ?: "My Family",
-                            color = Color.White,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (family != null) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            SyncBadge(status = family!!.syncStatus)
-                        }
-                    }
+                    Text(
+                        text = family?.familyName ?: "My Family",
+                        color = Color.White,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                     if (family != null) {
                         Text(
                             text = "Code: ${family?.pairingCode}",
@@ -145,16 +138,12 @@ fun FamilyMemberCard(member: FamilyMemberEntity, onClick: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = member.name,
-                        color = Color(0xFF0D1B2A),
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    SyncBadge(status = member.syncStatus)
-                }
+                Text(
+                    text = member.name,
+                    color = Color(0xFF0D1B2A),
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (member.isMe) {
@@ -190,29 +179,6 @@ fun FamilyMemberCard(member: FamilyMemberEntity, onClick: () -> Unit) {
                 Text(text = "Status: ${member.status}", color = Color.Gray, fontSize = 12.sp)
             }
         }
-    }
-}
-
-@Composable
-fun SyncBadge(status: SyncStatus) {
-    val (color, text) = when (status) {
-        SyncStatus.PENDING -> Color(0xFFFFB300) to "PENDING"
-        SyncStatus.SYNCED -> Color(0xFF43A047) to "SYNCED"
-        SyncStatus.FAILED -> Color(0xFFE53935) to "FAILED"
-    }
-    
-    Surface(
-        color = color.copy(alpha = 0.1f),
-        shape = RoundedCornerShape(4.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f))
-    ) {
-        Text(
-            text = text,
-            color = color,
-            fontSize = 8.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-        )
     }
 }
 

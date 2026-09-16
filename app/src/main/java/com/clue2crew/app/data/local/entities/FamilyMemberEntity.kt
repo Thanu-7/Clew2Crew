@@ -12,7 +12,5 @@ data class FamilyMemberEntity(
     val status: String,
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val isMe: Boolean = false,
-    val syncStatus: SyncStatus = SyncStatus.PENDING,
-    val lastUpdated: Long = System.currentTimeMillis()
+    val isMe: Boolean = false
 )
