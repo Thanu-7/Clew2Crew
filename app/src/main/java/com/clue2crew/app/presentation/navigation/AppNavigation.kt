@@ -26,5 +26,6 @@ fun AppNavigation(navController: NavHostController) {
         }
         composable(Screen.Emergency.route) { EmergencyScreen(navController, familyViewModel) }
         composable(Screen.OfflineTransfer.route) { OfflineTransferScreen(navController, familyViewModel) }
+        composable(Screen.Chat.route) { ChatScreen(navController, familyViewModel) }
     }
 }

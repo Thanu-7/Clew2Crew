@@ -11,6 +11,7 @@ import com.clue2crew.app.data.bluetooth.DiscoveredDevice
 import com.clue2crew.app.data.local.database.Clue2CrewDatabase
 import com.clue2crew.app.data.local.entities.FamilyEntity
 import com.clue2crew.app.data.local.entities.FamilyMemberEntity
+import com.clue2crew.app.data.local.entities.MessageEntity
 import com.clue2crew.app.data.repository.FamilyRepository
 import com.clue2crew.app.data.security.AuthProtocol
 import com.clue2crew.app.common.utils.LocationHelper
@@ -30,6 +31,8 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     val family: StateFlow<FamilyEntity?>
     @OptIn(ExperimentalCoroutinesApi::class)
     val members: StateFlow<List<FamilyMemberEntity>>
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val messages: StateFlow<List<MessageEntity>>
 
     // BLE Flows
     val isBleAdvertising: StateFlow<Boolean> = bleManager.isAdvertising
@@ -41,6 +44,7 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     val isBleAuthenticated: StateFlow<Boolean> = bleManager.isAuthenticated
     val authenticatedMemberId: StateFlow<String?> = bleManager.authenticatedMemberId
     val incomingBleLocation: StateFlow<AuthProtocol.LocationData?> = bleManager.incomingLocation
+    val incomingBleMessage: StateFlow<AuthProtocol.MessageData?> = bleManager.incomingMessage
 
     private val _currentDeviceLocation = MutableStateFlow<Location?>(null)
     val currentDeviceLocation: StateFlow<Location?> = _currentDeviceLocation.asStateFlow()
@@ -64,7 +68,7 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         val database = Clue2CrewDatabase.getDatabase(application)
-        repository = FamilyRepository(database.familyDao(), database.familyMemberDao())
+        repository = FamilyRepository(database.familyDao(), database.familyMemberDao(), database.messageDao())
 
         startLocationUpdates()
 
@@ -92,11 +96,44 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
             initialValue = emptyList()
         )
 
+        @OptIn(ExperimentalCoroutinesApi::class)
+        messages = family.flatMapLatest { f ->
+            if (f != null) {
+                repository.getMessages(f.familyId)
+            } else {
+                flowOf(emptyList())
+            }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
         // Monitor incoming BLE location updates
         viewModelScope.launch {
             bleManager.incomingLocation.collect { locData ->
                 locData?.let {
                     updateLocation(it.memberId, it.latitude, it.longitude, "Connected")
+                }
+            }
+        }
+
+        // Monitor incoming BLE messages
+        viewModelScope.launch {
+            bleManager.incomingMessage.collect { msgData ->
+                msgData?.let { data ->
+                    val currentFamilyId = family.value?.familyId ?: return@let
+                    val sender = members.value.find { it.memberId == data.senderId }
+                    
+                    val entity = MessageEntity(
+                        familyId = currentFamilyId,
+                        senderId = data.senderId,
+                        senderName = sender?.name ?: "Unknown",
+                        text = data.messageText,
+                        timestamp = data.timestampMs,
+                        isMe = false
+                    )
+                    repository.saveMessage(entity)
                 }
             }
         }
@@ -400,6 +437,25 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     fun disconnectBle() = bleManager.disconnectGatt()
 
     fun sendEmergencyAlert() = bleManager.sendEmergencyAlert()
+
+    fun sendMessage(text: String) {
+        val currentFamilyId = family.value?.familyId ?: return
+        val myId = prefs.getString("my_member_id", "") ?: ""
+        val myName = userName.value
+        
+        viewModelScope.launch {
+            val entity = MessageEntity(
+                familyId = currentFamilyId,
+                senderId = myId,
+                senderName = myName,
+                text = text,
+                timestamp = System.currentTimeMillis(),
+                isMe = true
+            )
+            repository.saveMessage(entity)
+            bleManager.sendMessage(text)
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()

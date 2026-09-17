@@ -13,4 +13,5 @@ sealed class Screen(val route: String) {
     }
     object Emergency : Screen("emergency")
     object OfflineTransfer : Screen("offline_transfer")
+    object Chat : Screen("chat")
 }

@@ -6,13 +6,16 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.clue2crew.app.data.local.dao.FamilyDao
 import com.clue2crew.app.data.local.dao.FamilyMemberDao
+import com.clue2crew.app.data.local.dao.MessageDao
 import com.clue2crew.app.data.local.entities.FamilyEntity
 import com.clue2crew.app.data.local.entities.FamilyMemberEntity
+import com.clue2crew.app.data.local.entities.MessageEntity
 
-@Database(entities = [FamilyEntity::class, FamilyMemberEntity::class], version = 4, exportSchema = false)
+@Database(entities = [FamilyEntity::class, FamilyMemberEntity::class, MessageEntity::class], version = 5, exportSchema = false)
 abstract class Clue2CrewDatabase : RoomDatabase() {
     abstract fun familyDao(): FamilyDao
     abstract fun familyMemberDao(): FamilyMemberDao
+    abstract fun messageDao(): MessageDao
 
     companion object {
         @Volatile

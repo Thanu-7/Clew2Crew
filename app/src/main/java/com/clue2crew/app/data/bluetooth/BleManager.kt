@@ -60,6 +60,9 @@ class BleManager(private val context: Context) {
     private val _incomingLocation = MutableStateFlow<AuthProtocol.LocationData?>(null)
     val incomingLocation: StateFlow<AuthProtocol.LocationData?> = _incomingLocation.asStateFlow()
 
+    private val _incomingMessage = MutableStateFlow<AuthProtocol.MessageData?>(null)
+    val incomingMessage: StateFlow<AuthProtocol.MessageData?> = _incomingMessage.asStateFlow()
+
     private val _pairedFamily = MutableStateFlow<AuthProtocol.ServerAuthResult?>(null)
     val pairedFamily: StateFlow<AuthProtocol.ServerAuthResult?> = _pairedFamily.asStateFlow()
 
@@ -410,6 +413,20 @@ class BleManager(private val context: Context) {
                     }
                 } catch (e: Exception) {
                     Log.e(BleUtils.LOG_TAG, "GATT Server: Failed to parse alert packet", e)
+                }
+            } else if (receivedMsg.startsWith("MSG_ENC:")) {
+                try {
+                    val encryptedHex = receivedMsg.substringAfter("MSG_ENC:")
+                    val sKey = serverSessionKey ?: throw IllegalArgumentException("No session key")
+                    val msgData = AuthProtocol.parseMessagePacket(encryptedHex.hexToByteArray(), sKey)
+                    _incomingMessage.value = msgData
+                    Log.d(BleUtils.LOG_TAG, "GATT Server received message from ${msgData.senderId}: ${msgData.messageText}")
+                    
+                    if (responseNeeded && device != null) {
+                        gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
+                    }
+                } catch (e: Exception) {
+                    Log.e(BleUtils.LOG_TAG, "GATT Server: Failed to parse message packet", e)
                 }
             }
         }
@@ -860,6 +877,16 @@ class BleManager(private val context: Context) {
             } catch (e: Exception) {
                 Log.e(BleUtils.LOG_TAG, "GattClient: Failed to parse alert packet", e)
             }
+        } else if (responseStr.startsWith("MSG_ENC:")) {
+            try {
+                val encryptedHex = responseStr.substringAfter("MSG_ENC:")
+                val cKey = clientSessionKey ?: throw IllegalArgumentException("No session key")
+                val msgData = AuthProtocol.parseMessagePacket(encryptedHex.hexToByteArray(), cKey)
+                _incomingMessage.value = msgData
+                Log.d(BleUtils.LOG_TAG, "GattClient received message from ${msgData.senderId}: ${msgData.messageText}")
+            } catch (e: Exception) {
+                Log.e(BleUtils.LOG_TAG, "GattClient: Failed to parse message packet", e)
+            }
         }
     }
 
@@ -947,6 +974,53 @@ class BleManager(private val context: Context) {
             Log.d(BleUtils.LOG_TAG, "Sent Emergency Alert")
         } catch (e: Exception) {
             Log.e(BleUtils.LOG_TAG, "Failed to send alert", e)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun sendMessage(text: String) {
+        val sKey = if (activeGatt != null) clientSessionKey else serverSessionKey
+        val senderId = currentMemberId
+
+        if (sKey == null || !_isAuthenticated.value) {
+            Log.e(BleUtils.LOG_TAG, "Cannot send message: Not authenticated")
+            return
+        }
+
+        try {
+            val packet = AuthProtocol.createMessagePacket(sKey, senderId, text)
+            val msg = "MSG_ENC:${packet.toHex()}"
+            val bytes = msg.toByteArray(Charsets.UTF_8)
+
+            if (activeGatt != null) {
+                val service = activeGatt?.getService(BleUtils.SERVICE_UUID)
+                val char = service?.getCharacteristic(BleUtils.CHARACTERISTIC_UUID)
+                if (char != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        activeGatt?.writeCharacteristic(char, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        char.value = bytes
+                        @Suppress("DEPRECATION")
+                        char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                        @Suppress("DEPRECATION")
+                        activeGatt?.writeCharacteristic(char)
+                    }
+                    Log.d(BleUtils.LOG_TAG, "GattClient: Sent encrypted message")
+                }
+            } else if (gattServer != null) {
+                val service = gattServer?.getService(BleUtils.SERVICE_UUID)
+                val char = service?.getCharacteristic(BleUtils.CHARACTERISTIC_UUID)
+                if (char != null) {
+                    char.value = bytes
+                    bluetoothManager?.getConnectedDevices(BluetoothProfile.GATT)?.forEach { device ->
+                        gattServer?.notifyCharacteristicChanged(device, char, false)
+                    }
+                    Log.d(BleUtils.LOG_TAG, "GattServer: Notified encrypted message")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(BleUtils.LOG_TAG, "Error sending message", e)
         }
     }
 

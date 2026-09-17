@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -167,6 +168,16 @@ fun HomeScreen(navController: NavController, viewModel: FamilyViewModel) {
                         onClick = { navController.navigate(Screen.Emergency.route) }
                     )
                 }
+            }
+
+            item {
+                StatusCard(
+                    modifier = Modifier.fillMaxWidth().height(100.dp),
+                    title = "Family Chat",
+                    icon = Icons.AutoMirrored.Filled.Chat,
+                    color = Color(0xFF1B263B),
+                    onClick = { navController.navigate(Screen.Chat.route) }
+                )
             }
         }
     }

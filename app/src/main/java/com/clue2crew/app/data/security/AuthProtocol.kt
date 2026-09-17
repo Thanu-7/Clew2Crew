@@ -164,4 +164,42 @@ object AuthProtocol {
         val accuracy: Float = 0f,
         val timestampMs: Long
     )
+
+    // Step 5: Encrypted Offline Messaging
+    fun createMessagePacket(
+        sessionKey: SecretKey,
+        senderId: String,
+        messageText: String,
+        timestampMs: Long = System.currentTimeMillis()
+    ): ByteArray {
+        val payload = "MSG:$senderId:$timestampMs:$messageText"
+        return CryptoManager.encrypt(payload.toByteArray(StandardCharsets.UTF_8), sessionKey)
+    }
+
+    fun parseMessagePacket(
+        encryptedPacket: ByteArray,
+        sessionKey: SecretKey,
+        nowMs: Long = System.currentTimeMillis()
+    ): MessageData {
+        val decryptedBytes = CryptoManager.decrypt(encryptedPacket, sessionKey)
+        val decryptedStr = String(decryptedBytes, StandardCharsets.UTF_8)
+        val parts = decryptedStr.split(":", limit = 4)
+        require(parts.size == 4 && parts[0] == "MSG") { "Invalid Message Packet format" }
+
+        val senderId = parts[1]
+        val timestampMs = parts[2].toLong()
+        val text = parts[3]
+
+        // Allow messages even if slightly older than 5 mins if we want persistence, 
+        // but let's keep the delta check for real-time security
+        require(Math.abs(nowMs - timestampMs) <= MAX_TIMESTAMP_DELTA_MS) { "Stale message packet" }
+
+        return MessageData(senderId, text, timestampMs)
+    }
+
+    data class MessageData(
+        val senderId: String,
+        val messageText: String,
+        val timestampMs: Long
+    )
 }

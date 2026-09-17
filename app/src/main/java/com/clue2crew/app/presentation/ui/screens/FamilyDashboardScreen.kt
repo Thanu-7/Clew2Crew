@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -72,17 +73,34 @@ fun FamilyDashboardScreen(navController: NavController, viewModel: FamilyViewMod
                 }
 
                 if (family != null) {
-                    IconButton(
-                        onClick = { showInviteDialog = true },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(Color(0xFF1B263B), CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PersonAdd,
-                            contentDescription = "Invite Member",
-                            tint = Color.White
-                        )
+                    Row {
+                        IconButton(
+                            onClick = { navController.navigate(Screen.Chat.route) },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(Color(0xFF415A77), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Chat,
+                                contentDescription = "Chat",
+                                tint = Color.White
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        IconButton(
+                            onClick = { showInviteDialog = true },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(Color(0xFF1B263B), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PersonAdd,
+                                contentDescription = "Invite Member",
+                                tint = Color.White
+                            )
+                        }
                     }
                 }
             }
