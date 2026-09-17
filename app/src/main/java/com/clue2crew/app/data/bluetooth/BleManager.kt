@@ -135,18 +135,22 @@ class BleManager(private val context: Context) {
             .build()
 
         val data = AdvertiseData.Builder()
-            .setIncludeDeviceName(false)
+            .setIncludeDeviceName(true)
+            .addServiceUuid(ParcelUuid(BleUtils.SERVICE_UUID))
+            .build()
+
+        val scanResponse = AdvertiseData.Builder()
             .addServiceUuid(ParcelUuid(BleUtils.SERVICE_UUID))
             .build()
 
         try {
-            advertiser?.startAdvertising(settings, data, advertiseCallback)
+            advertiser?.startAdvertising(settings, data, scanResponse, advertiseCallback)
             _isAdvertising.value = true
             _statusMessage.value = "Advertising Clew2Crew Service"
             Log.d(BleUtils.LOG_TAG, "Started BLE Advertising for service ${BleUtils.SERVICE_UUID}")
-        } catch (e: SecurityException) {
-            _statusMessage.value = "Security Exception on Advertise"
-            Log.e(BleUtils.LOG_TAG, "SecurityException during startAdvertising", e)
+        } catch (e: Exception) {
+            _statusMessage.value = "Error starting Advertise: ${e.message}"
+            Log.e(BleUtils.LOG_TAG, "Exception during startAdvertising", e)
         }
     }
 
@@ -451,25 +455,25 @@ class BleManager(private val context: Context) {
         }
 
         _discoveredDevices.value = emptyList()
-        val filter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(BleUtils.SERVICE_UUID))
-            .build()
-
+        
+        // Use an empty filter list and manually filter in onScanResult for better hardware compatibility
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+            .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
             .build()
 
         try {
-            scanner?.startScan(listOf(filter), settings, scanCallback)
+            scanner?.startScan(null, settings, scanCallback)
             _isScanning.value = true
             _statusMessage.value = "Scanning for Clew2Crew devices..."
-            Log.d(BleUtils.LOG_TAG, "Started BLE Scan for service ${BleUtils.SERVICE_UUID}")
+            Log.d(BleUtils.LOG_TAG, "Started BLE Scan (No Filter)")
 
             handler.removeCallbacks(stopScanRunnable)
             handler.postDelayed(stopScanRunnable, durationMs)
-        } catch (e: SecurityException) {
-            _statusMessage.value = "Security Exception on Scan"
-            Log.e(BleUtils.LOG_TAG, "SecurityException during startScan", e)
+        } catch (e: Exception) {
+            _statusMessage.value = "Error starting Scan: ${e.message}"
+            Log.e(BleUtils.LOG_TAG, "Exception during startScan", e)
         }
     }
 
@@ -492,28 +496,34 @@ class BleManager(private val context: Context) {
         @SuppressLint("MissingPermission")
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             result?.let { res ->
-                val device = res.device
-                val address = device.address ?: "Unknown"
-                val name = try {
-                    device.name ?: res.scanRecord?.deviceName ?: "Clew2Crew Device"
-                } catch (e: SecurityException) {
-                    "Clew2Crew Device"
-                }
-                val rssi = res.rssi
+                // Filter for our Service UUID manually to fix discovery issues on some Android hardware
+                val serviceUuids = res.scanRecord?.serviceUuids
+                val hasClew2CrewService = serviceUuids?.any { it.uuid == BleUtils.SERVICE_UUID } == true
 
-                Log.d(BleUtils.LOG_TAG, "Discovered device: $name ($address), RSSI: $rssi")
+                if (hasClew2CrewService) {
+                    val device = res.device
+                    val address = device.address ?: "Unknown"
+                    val name = try {
+                        device.name ?: res.scanRecord?.deviceName ?: "Clew2Crew Device"
+                    } catch (e: SecurityException) {
+                        "Clew2Crew Device"
+                    }
+                    val rssi = res.rssi
 
-                val currentList = _discoveredDevices.value.toMutableList()
-                val existingIndex = currentList.indexOfFirst { it.address == address }
-                if (existingIndex >= 0) {
-                    currentList[existingIndex] = currentList[existingIndex].copy(
-                        name = name,
-                        rssi = rssi
-                    )
-                } else {
-                    currentList.add(DiscoveredDevice(name = name, address = address, rssi = rssi))
+                    Log.d(BleUtils.LOG_TAG, "Discovered device: $name ($address), RSSI: $rssi")
+
+                    val currentList = _discoveredDevices.value.toMutableList()
+                    val existingIndex = currentList.indexOfFirst { it.address == address }
+                    if (existingIndex >= 0) {
+                        currentList[existingIndex] = currentList[existingIndex].copy(
+                            name = name,
+                            rssi = rssi
+                        )
+                    } else {
+                        currentList.add(DiscoveredDevice(name = name, address = address, rssi = rssi))
+                    }
+                    _discoveredDevices.value = currentList
                 }
-                _discoveredDevices.value = currentList
             }
         }
 
