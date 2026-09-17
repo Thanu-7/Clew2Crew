@@ -234,6 +234,17 @@ fun OfflineTransferScreen(navController: NavController, viewModel: FamilyViewMod
                                 fontSize = 14.sp,
                                 textAlign = TextAlign.Center
                             )
+                            if (locMy == null) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = { viewModel.retryLocationUpdates() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF415A77)),
+                                    modifier = Modifier.height(36.dp),
+                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+                                ) {
+                                    Text("Retry GPS", fontSize = 12.sp)
+                                }
+                            }
                         }
                     }
                 }

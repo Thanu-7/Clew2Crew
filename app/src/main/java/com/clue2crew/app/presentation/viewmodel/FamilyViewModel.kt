@@ -371,7 +371,8 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
         lastKnownLocation = location
     }
 
-    private fun startLocationUpdates() {
+    fun startLocationUpdates() {
+        locationHelper.stopLocationUpdates()
         locationHelper.startLocationUpdates { location ->
             updateCurrentDeviceLocation(location)
             updateFirstMemberLocation(location.latitude, location.longitude)
@@ -379,7 +380,6 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun retryLocationUpdates() {
-        locationHelper.stopLocationUpdates()
         startLocationUpdates()
     }
 

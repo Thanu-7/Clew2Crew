@@ -38,7 +38,6 @@ fun HomeScreen(navController: NavController, viewModel: FamilyViewModel) {
     val family by viewModel.family.collectAsState()
     val members by viewModel.members.collectAsState()
     val context = LocalContext.current
-    val locationHelper = remember { LocationHelper(context) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -47,10 +46,7 @@ fun HomeScreen(navController: NavController, viewModel: FamilyViewModel) {
                              permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
         
         if (locationGranted) {
-            locationHelper.startLocationUpdates { location ->
-                viewModel.updateCurrentDeviceLocation(location)
-                viewModel.updateFirstMemberLocation(location.latitude, location.longitude)
-            }
+            viewModel.startLocationUpdates()
         }
     }
 
@@ -62,17 +58,12 @@ fun HomeScreen(navController: NavController, viewModel: FamilyViewModel) {
         }
 
         if (allGranted) {
-            locationHelper.startLocationUpdates { location ->
-                viewModel.updateCurrentDeviceLocation(location)
-                viewModel.updateFirstMemberLocation(location.latitude, location.longitude)
-            }
+            viewModel.startLocationUpdates()
         } else {
             permissionLauncher.launch(requiredPermissions)
         }
 
-        onDispose {
-            locationHelper.stopLocationUpdates()
-        }
+        onDispose { }
     }
 
     Clue2CrewScaffold(navController = navController, viewModel = viewModel) { innerPadding ->

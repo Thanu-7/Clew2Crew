@@ -43,9 +43,14 @@ class LocationHelper(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun startLocationUpdates(onLocationUpdate: (Location) -> Unit) {
+        // Try to get last known location immediately
+        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+            location?.let { onLocationUpdate(it) }
+        }
+
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
             .setWaitForAccurateLocation(false)
-            .setMinUpdateIntervalMillis(3000)
+            .setMinUpdateIntervalMillis(2000)
             .setMaxUpdateDelayMillis(10000)
             .build()
 
