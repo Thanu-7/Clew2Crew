@@ -48,6 +48,17 @@ fun OfflineTransferScreen(navController: NavController, viewModel: FamilyViewMod
     val members by viewModel.members.collectAsState()
 
     var hasPermissions by remember { mutableStateOf(BleUtils.hasBluetoothPermissions(context)) }
+    var isBleEnabled by remember { mutableStateOf(BleUtils.isBluetoothEnabled(context)) }
+    var isGpsEnabled by remember { mutableStateOf(BleUtils.isLocationEnabled(context)) }
+
+    LaunchedEffect(Unit) {
+        while(true) {
+            hasPermissions = BleUtils.hasBluetoothPermissions(context)
+            isBleEnabled = BleUtils.isBluetoothEnabled(context)
+            isGpsEnabled = BleUtils.isLocationEnabled(context)
+            kotlinx.coroutines.delay(2000)
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -77,8 +88,8 @@ fun OfflineTransferScreen(navController: NavController, viewModel: FamilyViewMod
                 )
             }
 
-            // Permission Request Banner
-            if (!hasPermissions) {
+            // Warnings section
+            if (!hasPermissions || !isBleEnabled || !isGpsEnabled) {
                 item {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF780000)),
@@ -87,23 +98,40 @@ fun OfflineTransferScreen(navController: NavController, viewModel: FamilyViewMod
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "Bluetooth Permissions Required",
+                                text = "Action Required",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Grant Bluetooth permissions to enable advertising, scanning, and GATT connection.",
-                                color = Color.LightGray,
-                                fontSize = 12.sp
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(
-                                onClick = { permissionLauncher.launch(BleUtils.getRequiredPermissions()) },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White)
-                            ) {
-                                Text("Grant Permissions", color = Color(0xFF780000), fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            if (!hasPermissions) {
+                                Text("• Permissions missing (Bluetooth & Location)", color = Color.LightGray, fontSize = 12.sp)
+                                Button(
+                                    onClick = { permissionLauncher.launch(BleUtils.getRequiredPermissions()) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                                    modifier = Modifier.padding(top = 8.dp)
+                                ) {
+                                    Text("Grant Permissions", color = Color(0xFF780000))
+                                }
+                            }
+                            
+                            if (!isBleEnabled) {
+                                Text("• Bluetooth is turned OFF", color = Color.LightGray, fontSize = 12.sp)
+                            }
+                            
+                            if (!isGpsEnabled) {
+                                Text("• Location Services (GPS) are turned OFF", color = Color.LightGray, fontSize = 12.sp)
+                            }
+
+                            if (!isBleEnabled || !isGpsEnabled) {
+                                Text(
+                                    text = "Please turn them on in your phone settings.",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
                             }
                         }
                     }

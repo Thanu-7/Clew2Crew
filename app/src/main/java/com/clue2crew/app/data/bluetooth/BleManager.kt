@@ -112,6 +112,11 @@ class BleManager(private val context: Context) {
             Log.e(BleUtils.LOG_TAG, "Cannot start advertising: Bluetooth Disabled")
             return
         }
+        if (!BleUtils.isLocationEnabled(context)) {
+            _statusMessage.value = "Location Services Disabled"
+            Log.e(BleUtils.LOG_TAG, "Cannot start advertising: Location Services Disabled")
+            return
+        }
 
         val adapter = bluetoothManager?.adapter
         advertiser = adapter?.bluetoothLeAdvertiser
@@ -194,6 +199,14 @@ class BleManager(private val context: Context) {
                 BluetoothGattCharacteristic.PERMISSION_READ or
                         BluetoothGattCharacteristic.PERMISSION_WRITE
             )
+            
+            // Add Client Characteristic Configuration Descriptor (CCCD) for notifications
+            val descriptor = BluetoothGattDescriptor(
+                UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"),
+                BluetoothGattDescriptor.PERMISSION_READ or BluetoothGattDescriptor.PERMISSION_WRITE
+            )
+            characteristic.addDescriptor(descriptor)
+
             service.addCharacteristic(characteristic)
 
             gattServer = bluetoothManager?.openGattServer(context, gattServerCallback)
@@ -386,6 +399,25 @@ class BleManager(private val context: Context) {
                 }
             }
         }
+
+        override fun onDescriptorWriteRequest(
+            device: BluetoothDevice?,
+            requestId: Int,
+            descriptor: BluetoothGattDescriptor?,
+            preparedWrite: Boolean,
+            responseNeeded: Boolean,
+            offset: Int,
+            value: ByteArray?
+        ) {
+            Log.d(BleUtils.LOG_TAG, "GATT Server onDescriptorWriteRequest from ${device?.address}, desc=${descriptor?.uuid}")
+            if (responseNeeded && device != null) {
+                try {
+                    gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
+                } catch (e: SecurityException) {
+                    Log.e(BleUtils.LOG_TAG, "SecurityException in onDescriptorWriteRequest", e)
+                }
+            }
+        }
     }
 
     // ------------------------------------------------------------------------
@@ -402,6 +434,11 @@ class BleManager(private val context: Context) {
         if (!BleUtils.isBluetoothEnabled(context)) {
             _statusMessage.value = "Bluetooth Disabled"
             Log.e(BleUtils.LOG_TAG, "Cannot start scan: Bluetooth Disabled")
+            return
+        }
+        if (!BleUtils.isLocationEnabled(context)) {
+            _statusMessage.value = "Location Services Disabled"
+            Log.e(BleUtils.LOG_TAG, "Cannot start scan: Location Services Disabled")
             return
         }
 

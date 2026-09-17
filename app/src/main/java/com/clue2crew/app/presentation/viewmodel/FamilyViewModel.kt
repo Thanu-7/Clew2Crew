@@ -13,6 +13,7 @@ import com.clue2crew.app.data.local.entities.FamilyEntity
 import com.clue2crew.app.data.local.entities.FamilyMemberEntity
 import com.clue2crew.app.data.repository.FamilyRepository
 import com.clue2crew.app.data.security.AuthProtocol
+import com.clue2crew.app.common.utils.LocationHelper
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -24,6 +25,7 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     private val prefs = application.getSharedPreferences("clue2crew_prefs", Context.MODE_PRIVATE)
 
     private val bleManager = BleManager(application)
+    private val locationHelper = LocationHelper(application)
 
     val family: StateFlow<FamilyEntity?>
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -63,6 +65,8 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     init {
         val database = Clue2CrewDatabase.getDatabase(application)
         repository = FamilyRepository(database.familyDao(), database.familyMemberDao())
+
+        startLocationUpdates()
 
         // Ensure stable device identity
         if (prefs.getString("my_member_id", null) == null) {
@@ -305,6 +309,18 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
         lastKnownLocation = location
     }
 
+    private fun startLocationUpdates() {
+        locationHelper.startLocationUpdates { location ->
+            updateCurrentDeviceLocation(location)
+            updateFirstMemberLocation(location.latitude, location.longitude)
+        }
+    }
+
+    fun retryLocationUpdates() {
+        locationHelper.stopLocationUpdates()
+        startLocationUpdates()
+    }
+
     fun toggleDemoMode() {
         _isDemoMode.value = !_isDemoMode.value
         if (_isDemoMode.value) {
@@ -337,7 +353,7 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     // BLE Delegations
     fun startBleAdvertising() {
         val f = family.value
-        val pairingCode = f?.pairingCode ?: "DEFAULT"
+        val pairingCode = f?.pairingCode ?: prefs.getString("temp_pairing_code", "DEFAULT") ?: "DEFAULT"
         val myId = prefs.getString("my_member_id", "") ?: ""
         bleManager.setCredentials(pairingCode, myId, f?.familyId ?: "", f?.familyName ?: "")
         bleManager.startAdvertising()
@@ -348,7 +364,7 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     fun stopBleScan() = bleManager.stopScan()
 
     fun connectBleDevice(address: String) {
-        val pairingCode = family.value?.pairingCode ?: "DEFAULT"
+        val pairingCode = family.value?.pairingCode ?: prefs.getString("temp_pairing_code", "DEFAULT") ?: "DEFAULT"
         val myId = prefs.getString("my_member_id", "") ?: ""
         bleManager.connectToDevice(address, pairingCode, myId)
     }
@@ -360,5 +376,6 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     override fun onCleared() {
         super.onCleared()
         bleManager.cleanup()
+        locationHelper.stopLocationUpdates()
     }
 }

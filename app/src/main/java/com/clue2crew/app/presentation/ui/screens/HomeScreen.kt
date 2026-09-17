@@ -46,40 +46,31 @@ fun HomeScreen(navController: NavController, viewModel: FamilyViewModel) {
                              permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
         
         if (locationGranted) {
-            locationHelper.getCurrentLocation { location ->
-                location?.let { 
-                    viewModel.updateCurrentDeviceLocation(it)
-                    viewModel.updateFirstMemberLocation(it.latitude, it.longitude) 
-                }
+            locationHelper.startLocationUpdates { location ->
+                viewModel.updateCurrentDeviceLocation(location)
+                viewModel.updateFirstMemberLocation(location.latitude, location.longitude)
             }
         }
     }
 
-    LaunchedEffect(Unit) {
-        val requiredPermissions = mutableListOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        )
+    DisposableEffect(Unit) {
+        val requiredPermissions = BleUtils.getRequiredPermissions()
         
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            requiredPermissions.add(Manifest.permission.BLUETOOTH_SCAN)
-            requiredPermissions.add(Manifest.permission.BLUETOOTH_CONNECT)
-            requiredPermissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
-        }
-
         val allGranted = requiredPermissions.all {
             ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
         }
 
-        if (!allGranted) {
-            permissionLauncher.launch(requiredPermissions.toTypedArray())
-        } else {
-            locationHelper.getCurrentLocation { location ->
-                location?.let { 
-                    viewModel.updateCurrentDeviceLocation(it)
-                    viewModel.updateFirstMemberLocation(it.latitude, it.longitude) 
-                }
+        if (allGranted) {
+            locationHelper.startLocationUpdates { location ->
+                viewModel.updateCurrentDeviceLocation(location)
+                viewModel.updateFirstMemberLocation(location.latitude, location.longitude)
             }
+        } else {
+            permissionLauncher.launch(requiredPermissions)
+        }
+
+        onDispose {
+            locationHelper.stopLocationUpdates()
         }
     }
 
