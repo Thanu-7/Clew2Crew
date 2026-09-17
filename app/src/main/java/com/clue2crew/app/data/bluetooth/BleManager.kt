@@ -63,11 +63,16 @@ class BleManager(private val context: Context) {
     private val _pairedFamily = MutableStateFlow<AuthProtocol.ServerAuthResult?>(null)
     val pairedFamily: StateFlow<AuthProtocol.ServerAuthResult?> = _pairedFamily.asStateFlow()
 
+    private val _newMemberDiscovered = MutableStateFlow<Pair<String, String>?>(null)
+    val newMemberDiscovered: StateFlow<Pair<String, String>?> = _newMemberDiscovered.asStateFlow()
+
     private var currentPairingCode: String = ""
     private var currentMemberId: String = ""
+    private var currentMemberName: String = ""
     private var currentFamilyId: String = ""
     private var currentFamilyName: String = ""
     private var lastConnectedAddress: String? = null
+
     private var isAutoReconnectEnabled: Boolean = false
     private var reconnectionAttempts = 0
 
@@ -87,11 +92,14 @@ class BleManager(private val context: Context) {
 
     private val stopScanRunnable = Runnable { stopScan() }
 
-    fun setCredentials(pairingCode: String, memberId: String, familyId: String = "", familyName: String = "") {
+    fun setCredentials(pairingCode: String, memberId: String, familyId: String = "", familyName: String = "", memberName: String = "") {
         this.currentPairingCode = pairingCode
         this.currentMemberId = memberId
         this.currentFamilyId = familyId
         this.currentFamilyName = familyName
+        if (memberName.isNotEmpty()) {
+            this.currentMemberName = memberName
+        }
     }
 
     // ------------------------------------------------------------------------
@@ -280,11 +288,11 @@ class BleManager(private val context: Context) {
 
             if (receivedMsg.startsWith("AUTH_INIT:")) {
                 try {
-                    val (cClient, clientMemberId) = AuthProtocol.parseAuthInit(receivedMsg)
+                    val (cClient, clientMemberId, clientMemberName) = AuthProtocol.parseAuthInit(receivedMsg)
                     serverCClient = cClient
                     serverCServer = AuthProtocol.generateNonce()
 
-                    Log.d(BleUtils.LOG_TAG, "GATT Server: Parsed AUTH_INIT. clientMemberId=$clientMemberId, cClientHex=${cClient.toHex()}")
+                    Log.d(BleUtils.LOG_TAG, "GATT Server: Parsed AUTH_INIT. clientMemberId=$clientMemberId, name=$clientMemberName")
 
                     val familySharedKey = KeyStoreManager.deriveFamilySharedKey(currentPairingCode)
                     serverSessionKey = KeyStoreManager.deriveSessionKey(familySharedKey, cClient, serverCServer!!)
@@ -294,11 +302,12 @@ class BleManager(private val context: Context) {
                         currentMemberId,
                         cClient.toHex(),
                         currentFamilyName,
-                        currentFamilyId
+                        currentFamilyId,
+                        currentMemberName
                     )
 
                     val challengeResponse = "AUTH_CHALLENGE:${serverCServer!!.toHex()}:${proofServer.toHex()}"
-                    _lastReceivedMessage.value = "AUTH_INIT from $clientMemberId"
+                    _lastReceivedMessage.value = "AUTH_INIT from $clientMemberName"
                     _connectionState.value = "Server: Sent AUTH_CHALLENGE"
 
                     characteristic?.value = challengeResponse.toByteArray(Charsets.UTF_8)
@@ -317,7 +326,6 @@ class BleManager(private val context: Context) {
                     if (characteristic != null && device != null) {
                         try {
                             gattServer?.notifyCharacteristicChanged(device, characteristic, false)
-                            Log.d(BleUtils.LOG_TAG, "GATT Server notified AUTH_CHALLENGE to ${device.address}")
                         } catch (e: SecurityException) {
                             Log.e(BleUtils.LOG_TAG, "SecurityException notifying characteristic", e)
                         }
@@ -333,7 +341,7 @@ class BleManager(private val context: Context) {
                 try {
                     val clientProofHex = receivedMsg.substringAfter("AUTH_CONFIRM:")
                     val sKey = serverSessionKey ?: throw IllegalArgumentException("No server session key")
-                    val verifiedClientId = AuthProtocol.parseAndVerifyClientProof(
+                    val (verifiedClientId, verifiedClientName) = AuthProtocol.parseAndVerifyClientProof(
                         clientProofHex.hexToByteArray(),
                         sKey,
                         serverCServer!!.toHex()
@@ -341,8 +349,10 @@ class BleManager(private val context: Context) {
 
                     _isAuthenticated.value = true
                     _authenticatedMemberId.value = verifiedClientId
-                    _lastReceivedMessage.value = "AUTH_SUCCESS from $verifiedClientId"
-                    _connectionState.value = "Server: Authenticated with $verifiedClientId"
+                    _newMemberDiscovered.value = Pair(verifiedClientId, verifiedClientName)
+                    
+                    _lastReceivedMessage.value = "AUTH_SUCCESS from $verifiedClientName"
+                    _connectionState.value = "Server: Authenticated with $verifiedClientName"
 
                     characteristic?.value = "AUTH_SUCCESS".toByteArray(Charsets.UTF_8)
 
@@ -736,7 +746,7 @@ class BleManager(private val context: Context) {
     @SuppressLint("MissingPermission")
     private fun startAuthenticationHandshake(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
         clientCClient = AuthProtocol.generateNonce()
-        val authInitMsg = AuthProtocol.createAuthInit(clientCClient!!, currentMemberId)
+        val authInitMsg = AuthProtocol.createAuthInit(clientCClient!!, currentMemberId, currentMemberName)
         val bytes = authInitMsg.toByteArray(Charsets.UTF_8)
 
         Log.d(BleUtils.LOG_TAG, "GattClient: Starting Auth Handshake with msg=$authInitMsg, currentMemberId=$currentMemberId")
@@ -789,10 +799,13 @@ class BleManager(private val context: Context) {
                 if (currentFamilyId.isEmpty()) {
                     _pairedFamily.value = authResult
                 }
+                
+                _newMemberDiscovered.value = Pair(authResult.memberId, authResult.memberName)
 
                 val clientProof = AuthProtocol.createClientProof(
                     clientSessionKey!!,
                     currentMemberId,
+                    currentMemberName,
                     cServerHex
                 )
 

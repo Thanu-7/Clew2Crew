@@ -153,11 +153,33 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             family.collect { f ->
                 if (f != null) {
+                    val savedUserName = prefs.getString("my_user_name", "Me") ?: "Me"
+                    bleManager.setCredentials(f.pairingCode, prefs.getString("my_member_id", "") ?: "", f.familyId, f.familyName, savedUserName)
                     startBleAdvertising()
                     startBleScan(60000) // Scan for 1 minute
                 } else {
                     stopBleAdvertising()
                     stopBleScan()
+                }
+            }
+        }
+
+        // Monitor for newly discovered family members over BLE
+        viewModelScope.launch {
+            bleManager.newMemberDiscovered.collect { memberPair ->
+                memberPair?.let { (id, name) ->
+                    val currentFamilyId = family.value?.familyId ?: return@let
+                    
+                    // Add to local database if not already there
+                    val newMember = FamilyMemberEntity(
+                        memberId = id,
+                        familyId = currentFamilyId,
+                        name = name,
+                        deviceId = "BLE_DEVICE",
+                        status = "Connected",
+                        isMe = false
+                    )
+                    repository.addMember(newMember)
                 }
             }
         }
@@ -194,6 +216,9 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
         val familyId = UUID.randomUUID().toString()
         val pairingCode = generatePairingCode()
         val myId = prefs.getString("my_member_id", "") ?: ""
+
+        // Prepare BLE manager with credentials immediately
+        bleManager.setCredentials(pairingCode, myId, familyId, trimmedFamilyName, cleanUserName)
 
         viewModelScope.launch {
             try {
@@ -246,7 +271,7 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
         _statusMessage.value = "Searching for family with code $code..."
         prefs.edit().putString("temp_pairing_code", code).apply()
         
-        bleManager.setCredentials(code, myId)
+        bleManager.setCredentials(code, myId, memberName = cleanUserName)
         startBleScan(30000) // Scan for 30 seconds
     }
 
@@ -355,7 +380,8 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
         val f = family.value
         val pairingCode = f?.pairingCode ?: prefs.getString("temp_pairing_code", "DEFAULT") ?: "DEFAULT"
         val myId = prefs.getString("my_member_id", "") ?: ""
-        bleManager.setCredentials(pairingCode, myId, f?.familyId ?: "", f?.familyName ?: "")
+        val savedUserName = prefs.getString("my_user_name", "Me") ?: "Me"
+        bleManager.setCredentials(pairingCode, myId, f?.familyId ?: "", f?.familyName ?: "", savedUserName)
         bleManager.startAdvertising()
     }
 
@@ -366,6 +392,8 @@ class FamilyViewModel(application: Application) : AndroidViewModel(application) 
     fun connectBleDevice(address: String) {
         val pairingCode = family.value?.pairingCode ?: prefs.getString("temp_pairing_code", "DEFAULT") ?: "DEFAULT"
         val myId = prefs.getString("my_member_id", "") ?: ""
+        val savedUserName = prefs.getString("my_user_name", "Me") ?: "Me"
+        bleManager.setCredentials(pairingCode, myId, memberName = savedUserName)
         bleManager.connectToDevice(address, pairingCode, myId)
     }
 

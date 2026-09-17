@@ -33,14 +33,14 @@ object AuthProtocol {
     }
 
     // Step 1: Unauthenticated Init message
-    fun createAuthInit(cClient: ByteArray, memberId: String): String {
-        return "AUTH_INIT:${cClient.toHex()}:$memberId"
+    fun createAuthInit(cClient: ByteArray, memberId: String, name: String): String {
+        return "AUTH_INIT:${cClient.toHex()}:$memberId:$name"
     }
 
-    fun parseAuthInit(initMsg: String): Pair<ByteArray, String> {
+    fun parseAuthInit(initMsg: String): Triple<ByteArray, String, String> {
         val parts = initMsg.split(":")
-        require(parts.size == 3 && parts[0] == "AUTH_INIT") { "Invalid AUTH_INIT format" }
-        return Pair(parts[1].hexToByteArray(), parts[2])
+        require(parts.size >= 4 && parts[0] == "AUTH_INIT") { "Invalid AUTH_INIT format" }
+        return Triple(parts[1].hexToByteArray(), parts[2], parts[3])
     }
 
     // Step 2: Server Proof & Challenge
@@ -50,9 +50,10 @@ object AuthProtocol {
         cClientHex: String,
         familyName: String,
         familyId: String,
+        serverName: String,
         timestampMs: Long = System.currentTimeMillis()
     ): ByteArray {
-        val payload = "AUTH_RESP:$serverMemberId:$cClientHex:$timestampMs:$familyName:$familyId"
+        val payload = "AUTH_RESP:$serverMemberId:$cClientHex:$timestampMs:$familyName:$familyId:$serverName"
         return CryptoManager.encrypt(payload.toByteArray(StandardCharsets.UTF_8), sessionKey)
     }
 
@@ -73,23 +74,30 @@ object AuthProtocol {
         
         val familyName = if (parts.size > 4) parts[4] else "Unknown Family"
         val familyId = if (parts.size > 5) parts[5] else ""
+        val serverName = if (parts.size > 6) parts[6] else "Family Member"
 
         require(cClientHex == expectedCClientHex) { "Challenge mismatch" }
         require(Math.abs(nowMs - timestampMs) <= MAX_TIMESTAMP_DELTA_MS) { "Stale timestamp" }
 
-        return ServerAuthResult(serverMemberId, familyName, familyId)
+        return ServerAuthResult(serverMemberId, familyName, familyId, serverName)
     }
 
-    data class ServerAuthResult(val memberId: String, val familyName: String, val familyId: String)
+    data class ServerAuthResult(
+        val memberId: String,
+        val familyName: String,
+        val familyId: String,
+        val memberName: String
+    )
 
     // Step 3: Client Proof
     fun createClientProof(
         sessionKey: SecretKey,
         clientMemberId: String,
+        clientName: String,
         cServerHex: String,
         timestampMs: Long = System.currentTimeMillis()
     ): ByteArray {
-        val payload = "AUTH_CONFIRM:$clientMemberId:$cServerHex:$timestampMs"
+        val payload = "AUTH_CONFIRM:$clientMemberId:$clientName:$cServerHex:$timestampMs"
         return CryptoManager.encrypt(payload.toByteArray(StandardCharsets.UTF_8), sessionKey)
     }
 
@@ -98,20 +106,21 @@ object AuthProtocol {
         sessionKey: SecretKey,
         expectedCServerHex: String,
         nowMs: Long = System.currentTimeMillis()
-    ): String {
+    ): Pair<String, String> {
         val decryptedBytes = CryptoManager.decrypt(encryptedProof, sessionKey)
         val decryptedStr = String(decryptedBytes, StandardCharsets.UTF_8)
         val parts = decryptedStr.split(":")
-        require(parts.size == 4 && parts[0] == "AUTH_CONFIRM") { "Invalid AUTH_CONFIRM format" }
+        require(parts.size >= 5 && parts[0] == "AUTH_CONFIRM") { "Invalid AUTH_CONFIRM format" }
 
         val clientMemberId = parts[1]
-        val cServerHex = parts[2]
-        val timestampMs = parts[3].toLongOrNull() ?: throw IllegalArgumentException("Invalid timestamp")
+        val clientName = parts[2]
+        val cServerHex = parts[3]
+        val timestampMs = parts[4].toLongOrNull() ?: throw IllegalArgumentException("Invalid timestamp")
 
-        require(cServerHex == expectedCServerHex) { "Challenge mismatch: expected $expectedCServerHex, got $cServerHex" }
-        require(Math.abs(nowMs - timestampMs) <= MAX_TIMESTAMP_DELTA_MS) { "Stale timestamp: delta=${Math.abs(nowMs - timestampMs)} ms" }
+        require(cServerHex == expectedCServerHex) { "Challenge mismatch" }
+        require(Math.abs(nowMs - timestampMs) <= MAX_TIMESTAMP_DELTA_MS) { "Stale timestamp" }
 
-        return clientMemberId
+        return Pair(clientMemberId, clientName)
     }
 
     // Step 4: Encrypted Location Exchange
