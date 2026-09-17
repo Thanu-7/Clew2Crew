@@ -105,10 +105,11 @@ class CryptoManagerTest {
 
         // Step 1: Client -> Server Init
         val cClient = AuthProtocol.generateNonce()
-        val initMsg = AuthProtocol.createAuthInit(cClient, sampleMemberIdClient)
-        val (parsedCClient, parsedClientId) = AuthProtocol.parseAuthInit(initMsg)
+        val initMsg = AuthProtocol.createAuthInit(cClient, sampleMemberIdClient, "Bob")
+        val (parsedCClient, parsedClientId, parsedClientName) = AuthProtocol.parseAuthInit(initMsg)
 
         assertEquals(sampleMemberIdClient, parsedClientId)
+        assertEquals("Bob", parsedClientName)
         assertArrayEquals(cClient, parsedCClient)
 
         // Step 2: Server -> Client Challenge
@@ -119,7 +120,8 @@ class CryptoManagerTest {
             sampleMemberIdServer,
             parsedCClient.toHex(),
             "Test Family",
-            "family123"
+            "family123",
+            "Alice"
         )
 
         // Client receives challenge & verifies server
@@ -130,21 +132,24 @@ class CryptoManagerTest {
             cClient.toHex()
         )
         assertEquals(sampleMemberIdServer, authResult.memberId)
+        assertEquals("Alice", authResult.memberName)
 
         // Step 3: Client -> Server Proof
         val clientProof = AuthProtocol.createClientProof(
             clientSessionKey,
             sampleMemberIdClient,
+            "Bob",
             cServer.toHex()
         )
 
         // Server verifies client proof
-        val verifiedClientMemberId = AuthProtocol.parseAndVerifyClientProof(
+        val (verifiedClientMemberId, verifiedClientName) = AuthProtocol.parseAndVerifyClientProof(
             clientProof,
             serverSessionKey,
             cServer.toHex()
         )
         assertEquals(sampleMemberIdClient, verifiedClientMemberId)
+        assertEquals("Bob", verifiedClientName)
     }
 
     @Test(expected = AEADBadTagException::class)
@@ -156,7 +161,7 @@ class CryptoManagerTest {
         val cServer = AuthProtocol.generateNonce()
 
         val serverSessionKey = KeyStoreManager.deriveSessionKey(familyKeyServer, cClient, cServer)
-        val serverProof = AuthProtocol.createServerProof(serverSessionKey, sampleMemberIdServer, cClient.toHex(), "Family", "fam123")
+        val serverProof = AuthProtocol.createServerProof(serverSessionKey, sampleMemberIdServer, cClient.toHex(), "Family", "fam123", "Alice")
 
         val clientSessionKey = KeyStoreManager.deriveSessionKey(familyKeyClient, cClient, cServer)
         // Decryption fails with wrong key
@@ -177,6 +182,7 @@ class CryptoManagerTest {
             cClient.toHex(),
             "Family",
             "fam123",
+            "Alice",
             timestampMs = staleTimestamp
         )
 
@@ -202,7 +208,8 @@ class CryptoManagerTest {
             sampleMemberIdServer,
             cClientOriginal.toHex(),
             "Family",
-            "fam123"
+            "fam123",
+            "Alice"
         )
 
         // Verifying server proof expecting cClientReused fails challenge check
@@ -227,7 +234,8 @@ class CryptoManagerTest {
             sampleMemberIdServer,
             cClient.toHex(),
             "Family",
-            "fam123"
+            "fam123",
+            "Alice"
         )
 
         // Attempting to decrypt fabricated proof with real sessionKey throws AEADBadTagException
